@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useDemo } from "@/features/demo/DemoContext";
-import { Card, CardContent } from "@/components/ui/Card";
+import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -12,7 +12,7 @@ import { Modal } from "@/components/ui/Modal";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Plus, Pencil, Trash2, Target } from "lucide-react";
 import { Challenge, ChallengeCategory, ChallengeDifficulty } from "@/features/demo/types";
-import { cn } from "@/lib/utils";
+
 
 const CATEGORIES: ChallengeCategory[] = ["Water conservation", "Soil health", "Organic farming", "Crop rotation", "Integrated pest management", "Biodiversity", "Energy efficiency"];
 

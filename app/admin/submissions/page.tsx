@@ -2,14 +2,13 @@
 
 import { useState } from "react";
 import { useDemo } from "@/features/demo/DemoContext";
-import { Card, CardContent } from "@/components/ui/Card";
+import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Textarea } from "@/components/ui/Input";
-import { Inbox, CheckCircle2, XCircle, Clock } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Inbox, CheckCircle2, XCircle } from "lucide-react";
 
 export default function AdminSubmissionsPage() {
   const { submissions, challenges, reviewSubmission } = useDemo();

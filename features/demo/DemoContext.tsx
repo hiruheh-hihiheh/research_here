@@ -5,7 +5,6 @@ import type {
   Challenge,
   DemoRole,
   DemoState,
-  Submission,
 } from "./types";
 import type { SubmitActivityResult } from "./logic";
 import {

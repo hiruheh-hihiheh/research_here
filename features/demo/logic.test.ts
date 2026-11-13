@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { clone, normalizeState, completeLessonState, startChallengeState, updateChallengeState, deleteChallengeState, submitActivityState, reviewSubmissionState } from "./logic";
 import { INITIAL_DEMO_STATE } from "./mockData";
-import type { FarmerProfile, Challenge, DemoState } from "./types";
+import type { FarmerProfile, Challenge } from "./types";
 
 describe("migration", () => {
   it("fills missing sustainability categories and preserves valid values", () => {

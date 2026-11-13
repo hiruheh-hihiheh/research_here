@@ -7,10 +7,8 @@ import type {
   SustainabilityCategory,
 } from "./types";
 import {
-  BADGES,
   INITIAL_CHALLENGES,
   INITIAL_DEMO_STATE,
-  INITIAL_FARMER,
   levelForXp,
 } from "./mockData";
 

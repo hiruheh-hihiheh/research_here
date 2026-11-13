@@ -2,13 +2,13 @@
 
 import { useState, useMemo } from "react";
 import { useDemo } from "@/features/demo/DemoContext";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
+import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Progress } from "@/components/ui/Progress";
+
 import { Challenge } from "@/features/demo/types";
 import Link from "next/link";
 import { Target, Search, Clock, Zap } from "lucide-react";

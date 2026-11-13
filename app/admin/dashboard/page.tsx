@@ -1,7 +1,7 @@
 "use client";
 
 import { useDemo } from "@/features/demo/DemoContext";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
+import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -11,8 +11,6 @@ import {
   Target,
   Inbox,
   CheckCircle2,
-  BarChart3,
-  TrendingUp,
 } from "lucide-react";
 import {
   BarChart,
@@ -27,7 +25,7 @@ import {
 } from "recharts";
 
 export default function AdminDashboardPage() {
-  const { submissions, challenges, farmer, resetDemo } = useDemo();
+  const { submissions, challenges, resetDemo } = useDemo();
 
   const totalFarmers = 128; // demo
   const activeChallenges = challenges.length;
