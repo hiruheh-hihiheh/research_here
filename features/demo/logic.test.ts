@@ -218,9 +218,9 @@ describe("review lifecycle", () => {
     const beforeSoil = state.farmer.sustainabilityProgress["Soil health"];
     const subRes = submitActivityState(state, { challengeId: ch.id, description: "work", imageDataUrl: null });
     expect(subRes.success).toBe(true);
-    const successRes = subRes as { success: true; state: DemoState; submission: { id: string } };
-    const subId = successRes.submission.id;
-    const approved = reviewSubmissionState(successRes.state, subId, true);
+    if (!subRes.success) throw new Error("submission creation failed");
+    const subId = subRes.submission.id;
+    const approved = reviewSubmissionState(subRes.state, subId, true);
     const sub = approved.submissions.find((s) => s.id === subId)!;
     expect(sub.status).toBe("approved");
     expect(approved.farmer.xp).toBe(beforeXp + ch.xpReward);
@@ -238,10 +238,12 @@ describe("review lifecycle", () => {
     const beforeSoil = state.farmer.sustainabilityProgress["Soil health"];
     const subRes = submitActivityState(state, { challengeId: ch.id, description: "work", imageDataUrl: null });
     expect(subRes.success).toBe(true);
-    const successRes = subRes as { success: true; state: DemoState; submission: { id: string } };
-    const rejected = reviewSubmissionState(successRes.state, successRes.submission.id, false);
+    if (!subRes.success) throw new Error("submission creation failed");
+    const rejected = reviewSubmissionState(subRes.state, subRes.submission.id, false);
     expect(rejected.farmer.xp).toBe(beforeXp);
     expect(rejected.farmer.sustainabilityProgress["Soil health"]).toBe(beforeSoil);
+    const rejectedSub = rejected.submissions.find((s) => s.id === subRes.submission.id)!;
+    expect(rejectedSub.status).toBe("rejected");
   });
 });
 
