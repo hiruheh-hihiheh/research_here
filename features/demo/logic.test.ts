@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { clone, normalizeState, completeLessonState, startChallengeState, updateChallengeState, deleteChallengeState, submitActivityState, reviewSubmissionState } from "./logic";
+import { clone, normalizeState, completeLessonState, startChallengeState, updateChallengeState, deleteChallengeState, submitActivityState, reviewSubmissionState, validateChallengeInput, addChallengeState, countActiveChallenges } from "./logic";
 import { INITIAL_DEMO_STATE } from "./mockData";
 import type { FarmerProfile, Challenge } from "./types";
 
@@ -253,6 +253,53 @@ describe("review lifecycle", () => {
   });
 });
 
+describe("challenge validation", () => {
+  const valid = {
+    title: "Test Challenge",
+    description: "A sufficiently long description for validation.",
+    category: "Soil health",
+    difficulty: "Beginner",
+    xpReward: 10,
+    duration: "1 week",
+    objectives: ["Do thing"],
+    instructions: ["Step one"],
+  };
+
+  it("accepts valid challenge", () => {
+    const res = validateChallengeInput(valid);
+    expect(res.valid).toBe(true);
+    const stateRes = addChallengeState(INITIAL_DEMO_STATE, valid as Parameters<typeof addChallengeState>[1]);
+    expect(stateRes.challenge).not.toBeNull();
+  });
+
+  it("rejects invalid XP", () => {
+    const res = validateChallengeInput({ ...valid, xpReward: 0 });
+    expect(res.valid).toBe(false);
+    const stateRes = addChallengeState(INITIAL_DEMO_STATE, { ...valid, xpReward: 0 } as Parameters<typeof addChallengeState>[1]);
+    expect(stateRes.challenge).toBeNull();
+  });
+
+  it("rejects negative XP", () => {
+    const res = validateChallengeInput({ ...valid, xpReward: -5 });
+    expect(res.valid).toBe(false);
+  });
+
+  it("rejects missing objective", () => {
+    const res = validateChallengeInput({ ...valid, objectives: [] });
+    expect(res.valid).toBe(false);
+  });
+
+  it("counts only available and in-progress", () => {
+    const chs = [
+      { ...INITIAL_DEMO_STATE.challenges[0], status: "available" as const },
+      { ...INITIAL_DEMO_STATE.challenges[0], id: "x", status: "completed" as const },
+      { ...INITIAL_DEMO_STATE.challenges[0], id: "y", status: "archived" as const },
+      { ...INITIAL_DEMO_STATE.challenges[0], id: "z", status: "in-progress" as const },
+    ];
+    expect(countActiveChallenges(chs)).toBe(2);
+  });
+});
+
 describe("malformed state", () => {
   it("does not crash on invalid collections", () => {
     const old = clone(INITIAL_DEMO_STATE);
@@ -289,7 +336,7 @@ describe("challenge lifecycle", () => {
   it("in-progress cannot be archived or reset", () => {
     const state = clone(INITIAL_DEMO_STATE);
     const ip = state.challenges.find((c) => c.status === "in-progress")!;
-    const next = updateChallengeState(state, ip.id, { status: "archived" });
+    const next = updateChallengeState(state, ip.id, { status: "archived" }).state;
     const ch = next.challenges.find((c) => c.id === ip.id);
     expect(ch?.status).toBe("in-progress");
   });
@@ -297,7 +344,7 @@ describe("challenge lifecycle", () => {
   it("completed cannot be archived or reset", () => {
     const state = clone(INITIAL_DEMO_STATE);
     const completed = state.challenges.find((c) => c.status === "completed")!;
-    const next = updateChallengeState(state, completed.id, { status: "archived" });
+    const next = updateChallengeState(state, completed.id, { status: "archived" }).state;
     const ch = next.challenges.find((c) => c.id === completed.id);
     expect(ch?.status).toBe("completed");
   });
@@ -305,9 +352,9 @@ describe("challenge lifecycle", () => {
   it("available and archived can transition", () => {
     const state = clone(INITIAL_DEMO_STATE);
     const avail = state.challenges.find((c) => c.status === "available")!;
-    const archived = updateChallengeState(state, avail.id, { status: "archived" });
+    const archived = updateChallengeState(state, avail.id, { status: "archived" }).state;
     expect(archived.challenges.find((c) => c.id === avail.id)?.status).toBe("archived");
-    const restored = updateChallengeState(archived, avail.id, { status: "available" });
+    const restored = updateChallengeState(archived, avail.id, { status: "available" }).state;
     expect(restored.challenges.find((c) => c.id === avail.id)?.status).toBe("available");
   });
 });
@@ -332,7 +379,7 @@ describe("activity submission", () => {
   it("rejects archived", () => {
     const state = clone(INITIAL_DEMO_STATE);
     const avail = state.challenges.find((c) => c.status === "available")!;
-    const archivedState = updateChallengeState(state, avail.id, { status: "archived" });
+    const archivedState = updateChallengeState(state, avail.id, { status: "archived" }).state;
     const res = submitActivityState(archivedState, { challengeId: avail.id, description: "x", imageDataUrl: null });
     expect(res.success).toBe(false);
   });
@@ -368,7 +415,7 @@ describe("deletion protection", () => {
   it("archived challenge with pending legacy submission is protected", () => {
     const state = clone(INITIAL_DEMO_STATE);
     const ch = state.challenges.find((c) => c.status === "available")!;
-    const archivedState = updateChallengeState(state, ch.id, { status: "archived" });
+    const archivedState = updateChallengeState(state, ch.id, { status: "archived" }).state;
     archivedState.submissions = [
       { id: "s-legacy", farmerId: "f", challengeId: ch.id, description: "d", imageDataUrl: null, status: "pending", submittedAt: new Date().toISOString() },
     ];
@@ -413,7 +460,7 @@ describe("deletion protection", () => {
   it("archived can be deleted when safe", () => {
     const state = clone(INITIAL_DEMO_STATE);
     const avail = state.challenges.find((c) => c.status === "available")!;
-    const archivedState = updateChallengeState(state, avail.id, { status: "archived" });
+    const archivedState = updateChallengeState(state, avail.id, { status: "archived" }).state;
     const res = deleteChallengeState(archivedState, avail.id);
     expect(res.deleted).toBe(true);
   });

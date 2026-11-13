@@ -9,11 +9,12 @@ export function loadState<T>(key: string): T | null {
   }
 }
 
-export function saveState<T>(key: string, value: T): void {
-  if (typeof window === "undefined") return;
+export function saveState<T>(key: string, value: T): boolean {
+  if (typeof window === "undefined") return true;
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
+    return true;
   } catch {
-    // ignore
+    return false;
   }
 }

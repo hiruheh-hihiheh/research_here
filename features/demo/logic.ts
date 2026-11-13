@@ -12,8 +12,21 @@ import {
   levelForXp,
 } from "./mockData";
 
+export function countActiveChallenges(challenges: Challenge[]): number {
+  return challenges.filter((c) => c.status === "available" || c.status === "in-progress").length;
+}
+
 export function clone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v));
+}
+
+export const MAX_AGGREGATE_IMAGE_BYTES = 4 * 1024 * 1024;
+
+export function estimateDataUrlBytes(dataUrl: string | null): number {
+  if (!dataUrl) return 0;
+  const comma = dataUrl.indexOf(",");
+  const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+  return Math.ceil((base64.length * 3) / 4);
 }
 
 const SUSTAINABILITY_CATEGORIES: SustainabilityCategory[] = [
@@ -221,6 +234,13 @@ export function submitActivityState(
   if (ch.status !== "in-progress") {
     return { success: false, state: clone(state), error: "Activities can only be submitted for in-progress challenges." };
   }
+  if (payload.imageDataUrl) {
+    const existingBytes = state.submissions.reduce((sum, s) => sum + estimateDataUrlBytes(s.imageDataUrl), 0);
+    const newBytes = estimateDataUrlBytes(payload.imageDataUrl);
+    if (existingBytes + newBytes > MAX_AGGREGATE_IMAGE_BYTES) {
+      return { success: false, state: clone(state), error: "Evidence storage budget exceeded. Remove or compress images." };
+    }
+  }
   const submission: Submission = {
     id: `sub-${Date.now()}`,
     farmerId: "farmer-demo-1",
@@ -308,29 +328,98 @@ export function reviewSubmissionState(
   return applyUnlock(next);
 }
 
-export function addChallengeState(state: DemoState, challenge: Omit<Challenge, "id" | "status"> & { status?: ChallengeStatus }): { state: DemoState; challenge: Challenge } {
+export interface ChallengeValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
+const VALID_DIFFICULTIES = ["Beginner", "Intermediate", "Advanced"];
+const VALID_CATEGORIES: Challenge["category"][] = ["Water conservation", "Soil health", "Organic farming", "Crop rotation", "Integrated pest management", "Biodiversity", "Energy efficiency"];
+
+export function validateChallengeInput(input: {
+  title?: unknown;
+  description?: unknown;
+  category?: unknown;
+  difficulty?: unknown;
+  xpReward?: unknown;
+  duration?: unknown;
+  objectives?: unknown;
+  instructions?: unknown;
+}): ChallengeValidationResult {
+  const errors: string[] = [];
+  const title = typeof input.title === "string" ? input.title.trim() : "";
+  if (title.length < 3) errors.push("Title must be at least 3 characters.");
+  const description = typeof input.description === "string" ? input.description.trim() : "";
+  if (description.length < 10) errors.push("Description must be at least 10 characters.");
+  if (typeof input.category !== "string" || !VALID_CATEGORIES.includes(input.category as Challenge["category"])) {
+    errors.push("Category is invalid.");
+  }
+  if (typeof input.difficulty !== "string" || !VALID_DIFFICULTIES.includes(input.difficulty)) {
+    errors.push("Difficulty is invalid.");
+  }
+  const xp = input.xpReward;
+  if (typeof xp !== "number" || !Number.isFinite(xp) || !Number.isInteger(xp) || xp <= 0) {
+    errors.push("XP reward must be a positive integer.");
+  }
+  const duration = typeof input.duration === "string" ? input.duration.trim() : "";
+  if (duration.length < 2) errors.push("Duration is required.");
+  const objectives = Array.isArray(input.objectives) ? input.objectives.filter((x) => typeof x === "string" && x.trim().length > 0) : [];
+  if (objectives.length === 0) errors.push("At least one objective is required.");
+  const instructions = Array.isArray(input.instructions) ? input.instructions.filter((x) => typeof x === "string" && x.trim().length > 0) : [];
+  if (instructions.length === 0) errors.push("At least one instruction is required.");
+  return { valid: errors.length === 0, errors };
+}
+
+export function addChallengeState(state: DemoState, challenge: Omit<Challenge, "id" | "status"> & { status?: Challenge["status"] }): { state: DemoState; challenge: Challenge | null; error?: string } {
+  const validation = validateChallengeInput(challenge);
+  if (!validation.valid) {
+    return { state: clone(state), challenge: null, error: validation.errors.join(" ") };
+  }
   const newCh: Challenge = {
     ...challenge,
     id: `ch-${Date.now()}`,
     status: challenge.status ?? "available",
+    title: challenge.title.trim(),
+    description: challenge.description.trim(),
+    duration: challenge.duration.trim(),
+    objectives: challenge.objectives.map((x) => x.trim()).filter(Boolean),
+    instructions: challenge.instructions.map((x) => x.trim()).filter(Boolean),
   };
   const next = clone(state);
   next.challenges = [newCh, ...next.challenges];
   return { state: next, challenge: newCh };
 }
 
-export function updateChallengeState(state: DemoState, id: string, patch: Partial<Challenge>): DemoState {
+export function updateChallengeState(state: DemoState, id: string, patch: Partial<Challenge>): { state: DemoState; error?: string } {
   const next = clone(state);
   const ch = next.challenges.find((c) => c.id === id);
-  if (!ch) return next;
+  if (!ch) return { state: clone(state), error: "Challenge not found." };
   const protectedStatus = ch.status === "in-progress" || ch.status === "completed";
+  const candidate = {
+    title: patch.title ?? ch.title,
+    description: patch.description ?? ch.description,
+    category: patch.category ?? ch.category,
+    difficulty: patch.difficulty ?? ch.difficulty,
+    xpReward: patch.xpReward ?? ch.xpReward,
+    duration: patch.duration ?? ch.duration,
+    objectives: patch.objectives ?? ch.objectives,
+    instructions: patch.instructions ?? ch.instructions,
+  };
+  const validation = validateChallengeInput(candidate);
+  if (!validation.valid) {
+    return { state: clone(state), error: validation.errors.join(" ") };
+  }
   const safePatch: Partial<Challenge> = { ...patch };
   if (protectedStatus) {
     delete safePatch.status;
   }
-  // archived/available transitions allowed
+  if (safePatch.title) safePatch.title = safePatch.title.trim();
+  if (safePatch.description) safePatch.description = safePatch.description.trim();
+  if (safePatch.duration) safePatch.duration = safePatch.duration.trim();
+  if (safePatch.objectives) safePatch.objectives = safePatch.objectives.map((x) => x.trim()).filter(Boolean);
+  if (safePatch.instructions) safePatch.instructions = safePatch.instructions.map((x) => x.trim()).filter(Boolean);
   Object.assign(ch, safePatch);
-  return next;
+  return { state: next };
 }
 
 export function deleteChallengeState(state: DemoState, id: string): { state: DemoState; deleted: boolean; reason?: string } {

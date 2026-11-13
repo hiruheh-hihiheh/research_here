@@ -31,6 +31,7 @@ import { loadState, saveState } from "@/lib/storage";
 
 interface DemoContextValue {
   ready: boolean;
+  persistError: string | null;
   state: DemoState;
   role: DemoRole;
   setRole: (role: DemoRole) => void;
@@ -42,8 +43,8 @@ interface DemoContextValue {
   submitActivity: (payload: { challengeId: string; description: string; imageDataUrl: string | null }) => SubmitActivityResult;
   completeLesson: (lessonId: string, xpReward: number) => { awarded: boolean; xp: number };
   reviewSubmission: (id: string, approved: boolean, note?: string) => void;
-  addChallenge: (challenge: Omit<Challenge, "id" | "status"> & { status?: Challenge["status"] }) => Challenge;
-  updateChallenge: (id: string, patch: Partial<Challenge>) => void;
+  addChallenge: (challenge: Omit<Challenge, "id" | "status"> & { status?: Challenge["status"] }) => Challenge | null;
+  updateChallenge: (id: string, patch: Partial<Challenge>) => { error?: string };
   deleteChallenge: (id: string) => { deleted: boolean; reason?: string };
   levelInfo: ReturnType<typeof import("./mockData").levelForXp>;
   nextLevel: ReturnType<typeof import("./mockData").nextLevelForXp>;
@@ -57,6 +58,7 @@ const DemoContext = createContext<DemoContextValue | null>(null);
 export function DemoProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<DemoState>(() => clone(INITIAL_DEMO_STATE));
   const [ready, setReady] = useState(false);
+  const [persistError, setPersistError] = useState<string | null>(null);
   const stateRef = useRef(state);
 
   useEffect(() => {
@@ -81,7 +83,12 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (ready) saveState(STORAGE_KEY, state);
+    if (!ready) return;
+    const ok = saveState(STORAGE_KEY, state);
+    const timer = window.setTimeout(() => {
+      setPersistError(ok ? null : "Demo data could not be saved to browser storage. Evidence images may be too large.");
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [state, ready]);
 
   const setRole = useCallback((role: DemoRole) => {
@@ -133,15 +140,18 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
 
   const addChallenge = useCallback((challenge: Omit<Challenge, "id" | "status"> & { status?: Challenge["status"] }) => {
     const { state: next, challenge: newCh } = addChallengeState(stateRef.current, challenge);
-    stateRef.current = next;
-    setState(next);
+    if (newCh) {
+      stateRef.current = next;
+      setState(next);
+    }
     return newCh;
   }, []);
 
   const updateChallenge = useCallback((id: string, patch: Partial<Challenge>) => {
-    const next = updateChallengeState(stateRef.current, id, patch);
+    const { state: next, error } = updateChallengeState(stateRef.current, id, patch);
     stateRef.current = next;
     setState(next);
+    return { error };
   }, []);
 
   const deleteChallenge = useCallback((id: string) => {
@@ -159,6 +169,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
     const xpToNext = nextLevel ? nextLevel.xpRequired - state.farmer.xp : 0;
     return {
       ready,
+      persistError,
       state,
       role: state.role,
       setRole,
@@ -179,7 +190,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
       badges: BADGES,
       earnedBadges: state.farmer.badges,
     };
-  }, [ready, state, setRole, resetDemo, startChallenge, submitActivity, completeLesson, reviewSubmission, addChallenge, updateChallenge, deleteChallenge]);
+  }, [ready, persistError, state, setRole, resetDemo, startChallenge, submitActivity, completeLesson, reviewSubmission, addChallenge, updateChallenge, deleteChallenge]);
 
   return <DemoContext.Provider value={value}>{children}</DemoContext.Provider>;
 }

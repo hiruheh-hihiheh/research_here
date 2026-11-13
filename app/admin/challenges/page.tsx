@@ -12,6 +12,7 @@ import { Modal } from "@/components/ui/Modal";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Plus, Pencil, Trash2, Target } from "lucide-react";
 import { Challenge, ChallengeCategory, ChallengeDifficulty } from "@/features/demo/types";
+import { validateChallengeInput } from "@/features/demo/logic";
 
 
 const CATEGORIES: ChallengeCategory[] = ["Water conservation", "Soil health", "Organic farming", "Crop rotation", "Integrated pest management", "Biodiversity", "Energy efficiency"];
@@ -20,6 +21,7 @@ export default function AdminChallengesPage() {
   const { challenges, addChallenge, updateChallenge, deleteChallenge } = useDemo();
   const [editing, setEditing] = useState<Challenge | null>(null);
   const [creating, setCreating] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -53,6 +55,7 @@ export default function AdminChallengesPage() {
   };
 
   const handleSave = () => {
+    setFormError(null);
     const payload = {
       title: form.title,
       description: form.description,
@@ -64,11 +67,24 @@ export default function AdminChallengesPage() {
       instructions: form.instructions.split("\n").filter(Boolean),
       region: "All regions",
     };
+    const validation = validateChallengeInput(payload);
+    if (!validation.valid) {
+      setFormError(validation.errors.join(" "));
+      return;
+    }
     if (editing) {
-      updateChallenge(editing.id, { ...payload, status: form.status });
+      const result = updateChallenge(editing.id, { ...payload, status: form.status });
+      if (result.error) {
+        setFormError(result.error);
+        return;
+      }
       setEditing(null);
     } else {
-      addChallenge({ ...payload, status: form.status });
+      const created = addChallenge({ ...payload, status: form.status });
+      if (!created) {
+        setFormError("Challenge could not be created. Check the form values.");
+        return;
+      }
       setCreating(false);
     }
   };
@@ -151,8 +167,9 @@ export default function AdminChallengesPage() {
         </div>
       )}
 
-      <Modal open={modalOpen} onClose={() => { setCreating(false); setEditing(null); }} title={editing ? "Edit challenge" : "Add challenge"}>
+      <Modal open={modalOpen} onClose={() => { setCreating(false); setEditing(null); setFormError(null); }} title={editing ? "Edit challenge" : "Add challenge"}>
         <div className="space-y-3">
+          {formError && <div className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{formError}</div>}
           <div>
             <label className="mb-1 block text-sm font-medium">Title</label>
             <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useDemo } from "@/features/demo/DemoContext";
+import { countActiveChallenges } from "@/features/demo/logic";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
 import { Badge } from "@/components/ui/Badge";
@@ -28,7 +29,7 @@ export default function AdminDashboardPage() {
   const { submissions, challenges, resetDemo } = useDemo();
 
   const totalFarmers = 128; // demo
-  const activeChallenges = challenges.length;
+  const activeChallenges = countActiveChallenges(challenges);
   const pending = submissions.filter((s) => s.status === "pending").length;
   const approved = submissions.filter((s) => s.status === "approved").length;
 

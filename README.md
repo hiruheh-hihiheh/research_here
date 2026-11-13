@@ -1,36 +1,124 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AgriQuest
 
-## Getting Started
+**AgriQuest** is a gamified platform designed to promote sustainable farming practices. It is a college research prototype demonstrating how gamification can encourage farmers to learn about, adopt, and document sustainable agricultural practices.
 
-First, run the development server:
+> **Disclaimer:** This is a frontend-only research prototype. All data is simulated, all statistics are illustrative, and all persistence is browser-local. There is no backend, no real authentication, no real image recognition, and no real agricultural verification.
+
+## Research Purpose
+
+The project investigates how gamification can encourage farmers to learn about and adopt sustainable farming practices. It combines:
+
+1. Educational gamification — interactive lessons, quizzes, points, badges, and experience levels.
+2. Real-world farming activities — sustainable challenges, photo evidence submission, and simulated expert review.
+
+## Target Users
+
+- Farmers globally, across different regions, climates, and agricultural practices.
+- Research supervisors and reviewers evaluating the gamification concept.
+
+## Farmer Features
+
+- Dashboard with XP, level, sustainability score, and progress.
+- Challenge discovery with categories, filters, and search.
+- Learning Centre with lessons and quizzes.
+- Achievements and badges.
+- Leaderboard (simulated).
+- Activity submission with image evidence.
+- Sustainability reports with illustrative charts.
+
+## Admin Features
+
+- Admin dashboard with simulated participation metrics.
+- Submission review with approve/reject.
+- Challenge catalogue management (availability only).
+- Demo data reset.
+
+## Gamification Workflow
+
+1. Farmer learns through lessons and quizzes.
+2. Quiz completion awards demo XP once per lesson.
+3. Farmer starts challenges and submits evidence.
+4. Admin approves or rejects submissions.
+5. Approved activities award XP, update sustainability progress, and unlock badges.
+6. Levels and badges update automatically.
+
+## Technology Stack
+
+- Next.js 16 (App Router)
+- React 19
+- TypeScript (strict)
+- Tailwind CSS 4
+- Lucide React icons
+- Recharts
+- Vitest
+
+## Project Architecture
+
+```
+app/
+  page.tsx                 # Demo entry screen
+  farmer/                  # Farmer routes and layouts
+  admin/                   # Admin routes and layouts
+components/
+  ui/                      # Reusable UI primitives
+  layout/                  # Farmer and Admin shells
+features/
+  demo/                    # Types, mock data, context, business logic, tests
+lib/
+  storage.ts               # localStorage helpers
+  utils.ts                 # Utility helpers
+```
+
+## Routes
+
+Farmer:
+- `/farmer/dashboard`
+- `/farmer/challenges`
+- `/farmer/learning`
+- `/farmer/achievements`
+- `/farmer/leaderboard`
+- `/farmer/activities`
+- `/farmer/reports`
+
+Admin:
+- `/admin/dashboard`
+- `/admin/submissions`
+- `/admin/challenges`
+
+Entry:
+- `/`
+
+## Installation
+
+```bash
+npm install
+```
+
+## Local Development
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Test, Lint and Build
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm test
+npm run lint
+npm run build
+```
 
-## Learn More
+## Demo Instructions
 
-To learn more about Next.js, take a look at the following resources:
+1. Open the landing page and choose "Continue as Farmer".
+2. Explore the dashboard, challenges, learning, and activities.
+3. Start a challenge and submit an activity with an image.
+4. Switch to Admin and approve or reject the submission.
+5. Return to Farmer to see updated XP, progress, and badges.
+6. Use "Reset Demo Data" to restore the original seed state.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Disclaimer
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This is a research demonstration prototype. It does not implement real farmer registration, real authentication, real agricultural verification, real environmental impact calculations, or production data storage. All metrics are illustrative demo data. State is stored in the browser's localStorage and can be reset at any time.

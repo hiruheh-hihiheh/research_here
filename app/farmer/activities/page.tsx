@@ -12,8 +12,21 @@ import { UploadCloud, Image as ImageIcon, CheckCircle2, Clock, XCircle, AlertCir
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
+async function compressImage(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const maxDim = 1024;
+  const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("no context");
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.72);
+}
+
 export default function ActivitiesPage() {
-  const { challenges, submissions, submitActivity } = useDemo();
+  const { challenges, submissions, submitActivity, persistError } = useDemo();
   const inProgress = challenges.filter((c) => c.status === "in-progress");
   const [challengeId, setChallengeId] = useState(inProgress[0]?.id ?? "");
   const [description, setDescription] = useState("");
@@ -27,7 +40,7 @@ export default function ActivitiesPage() {
     : inProgress[0]?.id ?? "";
   const selectedChallenge = inProgress.find((c) => c.id === selectedChallengeId);
 
-  const handleFile = (file: File | null) => {
+  const handleFile = async (file: File | null) => {
     setError(null);
     if (!file) return;
     if (!file.type.startsWith("image/")) {
@@ -38,13 +51,19 @@ export default function ActivitiesPage() {
       setError("Image must be smaller than 2 MB.");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const url = reader.result as string;
-      setImageDataUrl(url);
-      setPreview(url);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressed = await compressImage(file);
+      setImageDataUrl(compressed);
+      setPreview(compressed);
+    } catch {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const url = reader.result as string;
+        setImageDataUrl(url);
+        setPreview(url);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -89,6 +108,9 @@ export default function ActivitiesPage() {
         <p className="text-sm text-muted-foreground">Submit farming activity evidence for expert review.</p>
       </div>
 
+      {persistError && (
+        <div className="rounded-xl bg-amber-50 px-4 py-2 text-sm text-amber-800">{persistError}</div>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>Submit new activity</CardTitle>
