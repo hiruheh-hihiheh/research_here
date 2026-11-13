@@ -70,6 +70,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <p className="text-sm text-muted-foreground">Demo Environment · Simulated data</p>
           </div>
           <div className="flex items-center gap-2">
+            <Link href="/farmer/dashboard" className="md:hidden">
+              <Button variant="outline" size="sm">Farmer</Button>
+            </Link>
             <ShieldCheck className="h-5 w-5 text-primary" />
             <Avatar initials="AD" size="sm" />
           </div>

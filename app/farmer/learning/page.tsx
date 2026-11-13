@@ -2,28 +2,34 @@
 
 import { useState } from "react";
 import { useDemo } from "@/features/demo/DemoContext";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
+import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { Progress } from "@/components/ui/Progress";
 import { LESSONS } from "@/features/demo/mockData";
-import { BookOpen, Clock, CheckCircle2, Award } from "lucide-react";
+import { BookOpen, Clock, CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+const PASS_THRESHOLD = 0.6;
 
 export default function LearningPage() {
   const { farmer, completeLesson } = useDemo();
   const [openLesson, setOpenLesson] = useState<string | null>(null);
-  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [answers, setAnswers] = useState<Record<string, Record<string, number>>>({});
   const [submitted, setSubmitted] = useState<Record<string, boolean>>({});
   const [scores, setScores] = useState<Record<string, number>>({});
   const [xpNotice, setXpNotice] = useState<string | null>(null);
 
   const lesson = LESSONS.find((l) => l.id === openLesson);
 
+  const lessonAnswers = openLesson ? answers[openLesson] ?? {} : {};
+
   const handleSelect = (qid: string, idx: number) => {
-    if (submitted[openLesson!]) return;
-    setAnswers((a) => ({ ...a, [qid]: idx }));
+    if (!openLesson || submitted[openLesson]) return;
+    setAnswers((a) => ({
+      ...a,
+      [openLesson]: { ...(a[openLesson] ?? {}), [qid]: idx },
+    }));
   };
 
   const handleSubmitQuiz = () => {
@@ -31,22 +37,39 @@ export default function LearningPage() {
     const qs = lesson.quiz;
     let score = 0;
     qs.forEach((q) => {
-      if (answers[q.id] === q.correctIndex) score++;
+      if (lessonAnswers[q.id] === q.correctIndex) score++;
     });
+    const passed = score / qs.length >= PASS_THRESHOLD;
     setScores((s) => ({ ...s, [lesson.id]: score }));
     setSubmitted((s) => ({ ...s, [lesson.id]: true }));
-    const result = completeLesson(lesson.id, lesson.xpReward);
-    if (result.awarded) {
-      setXpNotice(`+${lesson.xpReward} XP earned!`);
+    if (passed) {
+      const result = completeLesson(lesson.id, lesson.xpReward);
+      if (result.awarded) {
+        setXpNotice(`+${lesson.xpReward} XP earned!`);
+      } else {
+        setXpNotice("Lesson already completed — no duplicate XP.");
+      }
       setTimeout(() => setXpNotice(null), 3000);
     } else {
-      setXpNotice("Lesson already completed — no duplicate XP.");
-      setTimeout(() => setXpNotice(null), 3000);
+      setXpNotice(`Score ${score}/${qs.length}. Need at least ${Math.ceil(qs.length * PASS_THRESHOLD)} correct. Try again.`);
+      setTimeout(() => setXpNotice(null), 4000);
     }
   };
 
-  const resetQuiz = (id: string) => {
-    // keep submitted state; allow re-open? no reset answers for completed
+  const handleRetry = () => {
+    if (!lesson) return;
+    setAnswers((a) => ({ ...a, [lesson.id]: {} }));
+    setSubmitted((s) => ({ ...s, [lesson.id]: false }));
+    setScores((s) => {
+      const next = { ...s };
+      delete next[lesson.id];
+      return next;
+    });
+  };
+
+  const open = (id: string) => {
+    setOpenLesson(id);
+    if (!answers[id]) setAnswers((a) => ({ ...a, [id]: {} }));
   };
 
   return (
@@ -78,7 +101,7 @@ export default function LearningPage() {
                   <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{l.objectives.join("; ")}</p>
                   <div className="mt-3 flex items-center justify-between">
                     <Badge variant="default">{l.xpReward} XP</Badge>
-                    <Button size="sm" onClick={() => setOpenLesson(l.id)}>
+                    <Button size="sm" onClick={() => open(l.id)}>
                       {done ? "Review" : "Start lesson"}
                     </Button>
                   </div>
@@ -112,8 +135,8 @@ export default function LearningPage() {
             <div className="border-t border-border pt-3">
               <h4 className="font-semibold">Quiz</h4>
               {submitted[lesson.id] && (
-                <p className="text-sm text-primary font-medium">
-                  Score: {scores[lesson.id]}/{lesson.quiz.length} · {scores[lesson.id] === lesson.quiz.length ? "Excellent!" : "Keep learning"}
+                <p className={cn("text-sm font-medium", (scores[lesson.id] / lesson.quiz.length) >= PASS_THRESHOLD ? "text-primary" : "text-danger")}>
+                  Score: {scores[lesson.id]}/{lesson.quiz.length} · {(scores[lesson.id] / lesson.quiz.length) >= PASS_THRESHOLD ? "Passed" : "Not passed"}
                 </p>
               )}
               <div className="mt-2 space-y-3">
@@ -122,13 +145,14 @@ export default function LearningPage() {
                     <p className="text-sm font-medium">{qi + 1}. {q.question}</p>
                     <div className="mt-2 space-y-1.5">
                       {q.options.map((opt, idx) => {
-                        const selected = answers[q.id] === idx;
+                        const selected = lessonAnswers[q.id] === idx;
                         const isCorrect = submitted[lesson.id] && idx === q.correctIndex;
                         const isWrong = submitted[lesson.id] && selected && idx !== q.correctIndex;
                         return (
                           <button
                             key={idx}
                             onClick={() => handleSelect(q.id, idx)}
+                            disabled={submitted[lesson.id]}
                             className={cn(
                               "w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors",
                               selected && !submitted[lesson.id] ? "border-primary bg-sage" : "border-border bg-card",
@@ -147,10 +171,20 @@ export default function LearningPage() {
                   </div>
                 ))}
               </div>
-              {!submitted[lesson.id] && (
-                <Button className="mt-3" onClick={handleSubmitQuiz} disabled={lesson.quiz.some((q) => answers[q.id] === undefined)}>
+              {!submitted[lesson.id] ? (
+                <Button
+                  className="mt-3"
+                  onClick={handleSubmitQuiz}
+                  disabled={lesson.quiz.some((q) => lessonAnswers[q.id] === undefined)}
+                >
                   Submit quiz
                 </Button>
+              ) : (
+                (scores[lesson.id] / lesson.quiz.length) < PASS_THRESHOLD && (
+                  <Button className="mt-3" variant="secondary" onClick={handleRetry}>
+                    Retry quiz
+                  </Button>
+                )
               )}
             </div>
           </div>

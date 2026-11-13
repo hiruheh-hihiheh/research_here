@@ -30,7 +30,8 @@ export type SustainabilityCategory =
   | "Soil health"
   | "Crop diversity"
   | "Integrated pest management"
-  | "Biodiversity";
+  | "Biodiversity"
+  | "Energy efficiency";
 
 export interface FarmerProfile {
   id: string;

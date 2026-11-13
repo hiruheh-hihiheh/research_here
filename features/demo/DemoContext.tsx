@@ -63,7 +63,6 @@ function unlockBadges(state: DemoState): string[] {
   const organicDone = completedChallenges.some((c) => c.category === "Organic farming");
   const bioDone = completedChallenges.some((c) => c.category === "Biodiversity");
   const cropDone = completedChallenges.some((c) => c.category === "Crop rotation");
-  const approvedCount = state.submissions.filter((s) => s.status === "approved").length + f.completedChallenges.length;
   if (waterDone) badges.add("water-guardian");
   if (soilDone) badges.add("soil-guardian");
   if (organicDone) badges.add("organic-pioneer");
@@ -72,7 +71,7 @@ function unlockBadges(state: DemoState): string[] {
   const lvl = levelForXp(f.xp);
   if (lvl.level >= 5) badges.add("green-champion");
   if (state.completedLessons.length >= 3) badges.add("learning-master");
-  if (approvedCount >= 5) badges.add("sustainability-champion");
+  if (f.completedChallenges.length >= 5) badges.add("sustainability-champion");
   return Array.from(badges);
 }
 
@@ -146,58 +145,54 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const completeLesson = useCallback((lessonId: string, xpReward: number) => {
-    let awarded = false;
+    const alreadyAwarded = state.lessonXpAwarded.includes(lessonId);
     setState((s) => {
       const next = clone(s);
-      if (next.lessonXpAwarded.includes(lessonId)) {
-        // already awarded; ensure completedLessons includes
-        if (!next.completedLessons.includes(lessonId)) next.completedLessons.push(lessonId);
-        if (!next.farmer.completedLessons.includes(lessonId)) next.farmer.completedLessons.push(lessonId);
-        return next;
-      }
-      awarded = true;
-      next.lessonXpAwarded.push(lessonId);
       if (!next.completedLessons.includes(lessonId)) next.completedLessons.push(lessonId);
       if (!next.farmer.completedLessons.includes(lessonId)) next.farmer.completedLessons.push(lessonId);
+      if (next.lessonXpAwarded.includes(lessonId)) {
+        return next;
+      }
+      next.lessonXpAwarded.push(lessonId);
       next.farmer.xp += xpReward;
-      // bump learning-related sustainability? no
       return applyUnlock(next);
     });
-    return { awarded, xp: xpReward };
-  }, []);
+    return { awarded: !alreadyAwarded, xp: xpReward };
+  }, [state.lessonXpAwarded]);
 
   const reviewSubmission = useCallback((id: string, approved: boolean, note?: string) => {
     setState((s) => {
       const next = clone(s);
       const sub = next.submissions.find((x) => x.id === id);
-      if (!sub) return s;
+      if (!sub || sub.status !== "pending") return s;
       sub.status = approved ? "approved" : "rejected";
       sub.reviewedAt = new Date().toISOString();
       sub.reviewNote = note ?? (approved ? "Approved by agricultural expert (demo)." : "Rejected: evidence insufficient (demo).");
       if (approved) {
         const ch = next.challenges.find((c) => c.id === sub.challengeId);
         if (ch) {
+          const alreadyCompleted = next.farmer.completedChallenges.includes(ch.id);
           ch.status = "completed";
-          if (!next.farmer.completedChallenges.includes(ch.id)) next.farmer.completedChallenges.push(ch.id);
-          next.farmer.inProgressChallenges = next.farmer.inProgressChallenges.filter((x) => x !== ch.id);
-          next.farmer.xp += ch.xpReward;
-          // sustainability progress bump (illustrative)
-          const catMap: Record<string, keyof FarmerProfile["sustainabilityProgress"]> = {
-            "Water conservation": "Water conservation",
-            "Soil health": "Soil health",
-            "Organic farming": "Soil health",
-            "Crop rotation": "Crop diversity",
-            "Integrated pest management": "Integrated pest management",
-            "Biodiversity": "Biodiversity",
-            "Energy efficiency": "Biodiversity",
-          };
-          const key = catMap[ch.category];
-          if (key) {
-            next.farmer.sustainabilityProgress[key] = Math.min(100, next.farmer.sustainabilityProgress[key] + 8);
+          if (!alreadyCompleted) {
+            next.farmer.completedChallenges.push(ch.id);
+            next.farmer.xp += ch.xpReward;
+            const catMap: Record<string, keyof FarmerProfile["sustainabilityProgress"]> = {
+              "Water conservation": "Water conservation",
+              "Soil health": "Soil health",
+              "Organic farming": "Soil health",
+              "Crop rotation": "Crop diversity",
+              "Integrated pest management": "Integrated pest management",
+              "Biodiversity": "Biodiversity",
+              "Energy efficiency": "Energy efficiency",
+            };
+            const key = catMap[ch.category];
+            if (key) {
+              next.farmer.sustainabilityProgress[key] = Math.min(100, next.farmer.sustainabilityProgress[key] + 8);
+            }
+            const vals = Object.values(next.farmer.sustainabilityProgress);
+            next.farmer.sustainabilityScore = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
           }
-          // sustainability score
-          const vals = Object.values(next.farmer.sustainabilityProgress);
-          next.farmer.sustainabilityScore = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+          next.farmer.inProgressChallenges = next.farmer.inProgressChallenges.filter((x) => x !== ch.id);
         }
       }
       return applyUnlock(next);

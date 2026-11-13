@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { useDemo } from "@/features/demo/DemoContext";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -10,9 +11,11 @@ import {
   Target,
   BookOpen,
   Trophy,
-  ListChecks,
-  BarChart3,
   UploadCloud,
+  BarChart3,
+  ListChecks,
+  MoreHorizontal,
+  X,
   Settings2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -23,13 +26,18 @@ const NAV = [
   { href: "/farmer/learning", label: "Learn", icon: BookOpen },
   { href: "/farmer/activities", label: "Activities", icon: UploadCloud },
   { href: "/farmer/achievements", label: "Badges", icon: Trophy },
-  { href: "/farmer/leaderboard", label: "Ranks", icon: ListChecks },
+  { href: "/farmer/leaderboard", label: "Leaderboard", icon: ListChecks },
   { href: "/farmer/reports", label: "Reports", icon: BarChart3 },
 ];
+
+const PRIMARY_MOBILE = NAV.slice(0, 4);
 
 export function FarmerShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { farmer, levelInfo } = useDemo();
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  const isActive = (href: string) => pathname === href || pathname?.startsWith(href + "/");
 
   return (
     <div className="min-h-screen bg-background">
@@ -44,7 +52,7 @@ export function FarmerShell({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="flex-1 space-y-1 px-3">
           {NAV.map((item) => {
-            const active = pathname === item.href || pathname?.startsWith(item.href + "/");
+            const active = isActive(item.href);
             const Icon = item.icon;
             return (
               <Link
@@ -77,7 +85,7 @@ export function FarmerShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* Top bar (mobile + desktop) */}
+      {/* Top bar */}
       <header className="sticky top-0 z-30 border-b border-border bg-card/80 backdrop-blur md:ml-64">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2 md:hidden">
@@ -103,8 +111,8 @@ export function FarmerShell({ children }: { children: React.ReactNode }) {
       {/* Bottom nav mobile */}
       <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-card md:hidden">
         <div className="flex items-center justify-around px-1 py-1.5">
-          {NAV.slice(0, 5).map((item) => {
-            const active = pathname === item.href;
+          {PRIMARY_MOBILE.map((item) => {
+            const active = isActive(item.href);
             const Icon = item.icon;
             return (
               <Link key={item.href} href={item.href} className={cn("flex flex-1 flex-col items-center gap-0.5 py-1 text-[10px]", active ? "text-primary" : "text-muted-foreground")}>
@@ -113,8 +121,62 @@ export function FarmerShell({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+          <button
+            onClick={() => setMoreOpen(true)}
+            className={cn("flex flex-1 flex-col items-center gap-0.5 py-1 text-[10px]", moreOpen ? "text-primary" : "text-muted-foreground")}
+            aria-label="More navigation"
+          >
+            <MoreHorizontal className="h-5 w-5" />
+            <span>More</span>
+          </button>
         </div>
       </nav>
+
+      {/* More drawer */}
+      {moreOpen && (
+        <div className="fixed inset-0 z-40 md:hidden" onClick={() => setMoreOpen(false)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="absolute bottom-0 left-0 right-0 rounded-t-3xl bg-card p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <p className="font-semibold">More</p>
+              <button onClick={() => setMoreOpen(false)} aria-label="Close menu">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {NAV.slice(4).map((item) => {
+                const active = isActive(item.href);
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMoreOpen(false)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-xl border border-border px-3 py-2.5 text-sm font-medium",
+                      active ? "bg-sage text-primary-dark" : "text-muted-foreground"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+              <Link
+                href="/admin/dashboard"
+                onClick={() => setMoreOpen(false)}
+                className="flex items-center gap-2 rounded-xl border border-border px-3 py-2.5 text-sm font-medium text-muted-foreground"
+              >
+                <Settings2 className="h-4 w-4" />
+                Switch to Admin
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

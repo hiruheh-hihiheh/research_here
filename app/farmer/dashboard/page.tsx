@@ -38,10 +38,11 @@ const SUSTAINABILITY_ICONS: Record<string, React.ComponentType<{ className?: str
   "Crop diversity": Leaf,
   "Integrated pest management": Bug,
   "Biodiversity": Wind,
+  "Energy efficiency": Zap,
 };
 
 export default function FarmerDashboardPage() {
-  const { farmer, levelInfo, nextLevel, xpToNext, challenges, resetDemo } = useDemo();
+  const { farmer, levelInfo, nextLevel, xpToNext, challenges, submissions, resetDemo } = useDemo();
 
   const completedCount = farmer.completedChallenges.length;
   const inProgressCount = farmer.inProgressChallenges.length;
@@ -49,11 +50,21 @@ export default function FarmerDashboardPage() {
 
   const featured = challenges.find((c) => c.status === "available") ?? challenges[0];
 
-  const recentActivities = [
-    { text: "Completed a composting lesson", icon: BookOpen, time: "2 days ago" },
-    { text: "Submitted water conservation challenge", icon: Target, time: "4 days ago" },
-    { text: "Earned Soil Guardian badge", icon: Sprout, time: "1 week ago" },
-  ];
+  const recentActivities: { text: string; icon: React.ComponentType<{ className?: string }>; time: string }[] = [];
+  submissions.slice(0, 3).forEach((s) => {
+    const ch = challenges.find((c) => c.id === s.challengeId);
+    recentActivities.push({ text: `Submitted ${ch?.title ?? "activity"} (${s.status})`, icon: Target, time: new Date(s.submittedAt).toLocaleDateString() });
+  });
+  farmer.completedChallenges.slice(0, 3).forEach((id) => {
+    const ch = challenges.find((c) => c.id === id);
+    if (ch) recentActivities.push({ text: `Completed ${ch.title}`, icon: Sprout, time: "Recently" });
+  });
+  farmer.completedLessons.slice(0, 3).forEach((id) => {
+    recentActivities.push({ text: `Completed lesson: ${id.replace(/-/g, " ")}`, icon: BookOpen, time: "Recently" });
+  });
+  if (recentActivities.length === 0) {
+    recentActivities.push({ text: "No recent activity yet", icon: BookOpen, time: "Start learning or challenges" });
+  }
 
   return (
     <div className="space-y-5">

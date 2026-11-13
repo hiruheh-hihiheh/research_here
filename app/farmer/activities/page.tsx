@@ -5,23 +5,38 @@ import { useDemo } from "@/features/demo/DemoContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { UploadCloud, Image as ImageIcon, CheckCircle2, Clock, XCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { UploadCloud, Image as ImageIcon, CheckCircle2, Clock, XCircle, AlertCircle } from "lucide-react";
+
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 export default function ActivitiesPage() {
-  const { challenges, submissions, submitActivity } = useDemo();
-  const [challengeId, setChallengeId] = useState(challenges[0]?.id ?? "");
+  const { challenges, submissions, submitActivity, startChallenge } = useDemo();
+  const inProgress = challenges.filter((c) => c.status === "in-progress");
+  const [challengeId, setChallengeId] = useState(inProgress[0]?.id ?? "");
   const [description, setDescription] = useState("");
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // keep selection valid
+  const selectedChallenge = inProgress.find((c) => c.id === challengeId) ?? inProgress[0];
+  if (selectedChallenge && selectedChallenge.id !== challengeId) setChallengeId(selectedChallenge.id);
+
   const handleFile = (file: File | null) => {
+    setError(null);
     if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Please select an image file.");
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setError("Image must be smaller than 2 MB.");
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       const url = reader.result as string;
@@ -33,8 +48,16 @@ export default function ActivitiesPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!description.trim()) return;
-    submitActivity({ challengeId, description, imageDataUrl });
+    setError(null);
+    if (description.trim().length < 10) {
+      setError("Please enter a meaningful description (at least 10 characters).");
+      return;
+    }
+    if (!selectedChallenge) {
+      setError("Start a challenge first to submit an activity.");
+      return;
+    }
+    submitActivity({ challengeId: selectedChallenge.id, description: description.trim(), imageDataUrl });
     setDescription("");
     setImageDataUrl(null);
     setPreview(null);
@@ -65,55 +88,67 @@ export default function ActivitiesPage() {
           <CardTitle>Submit new activity</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div>
-              <label className="mb-1 block text-sm font-medium">Challenge</label>
-              <Select value={challengeId} onChange={(e) => setChallengeId(e.target.value)}>
-                {challenges.map((c) => (
-                  <option key={c.id} value={c.id}>{c.title}</option>
-                ))}
-              </Select>
+          {inProgress.length === 0 ? (
+            <div className="rounded-xl bg-sage/40 p-4 text-sm">
+              <p className="font-medium text-primary-dark">No active challenges.</p>
+              <p className="mt-1 text-muted-foreground">Start a challenge from the Challenges page, then submit your activity here.</p>
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">Description</label>
-              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe what you did on your farm..." required />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">Photo evidence</label>
-              <div className="flex items-center gap-3">
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
-                />
-                <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
-                  <UploadCloud className="h-4 w-4" /> Choose image
-                </Button>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium">Challenge</label>
+                <Select value={selectedChallenge?.id ?? ""} onChange={(e) => setChallengeId(e.target.value)}>
+                  {inProgress.map((c) => (
+                    <option key={c.id} value={c.id}>{c.title}</option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Description</label>
+                <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe what you did on your farm..." required />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Photo evidence</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
+                  />
+                  <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
+                    <UploadCloud className="h-4 w-4" /> Choose image
+                  </Button>
+                  {preview && (
+                    <button type="button" onClick={() => { setPreview(null); setImageDataUrl(null); if (fileRef.current) fileRef.current.value = ""; }} className="text-xs text-muted-foreground hover:text-danger">
+                      Remove
+                    </button>
+                  )}
+                </div>
                 {preview && (
-                  <button type="button" onClick={() => { setPreview(null); setImageDataUrl(null); if (fileRef.current) fileRef.current.value = ""; }} className="text-xs text-muted-foreground hover:text-danger">
-                    Remove
-                  </button>
+                  <div className="mt-3 overflow-hidden rounded-xl border border-border">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={preview} alt="Preview" className="max-h-60 w-full object-cover" />
+                  </div>
+                )}
+                {!preview && (
+                  <div className="mt-3 flex h-32 items-center justify-center rounded-xl border border-dashed border-border bg-background text-muted-foreground">
+                    <div className="text-center">
+                      <ImageIcon className="mx-auto h-8 w-8" />
+                      <p className="text-xs">No image selected (demo preview only)</p>
+                    </div>
+                  </div>
                 )}
               </div>
-              {preview && (
-                <div className="mt-3 overflow-hidden rounded-xl border border-border">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={preview} alt="Preview" className="max-h-60 w-full object-cover" />
+              {error && (
+                <div className="flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
+                  <AlertCircle className="h-4 w-4" /> {error}
                 </div>
               )}
-              {!preview && (
-                <div className="mt-3 flex h-32 items-center justify-center rounded-xl border border-dashed border-border bg-background text-muted-foreground">
-                  <div className="text-center">
-                    <ImageIcon className="mx-auto h-8 w-8" />
-                    <p className="text-xs">No image selected (demo preview only)</p>
-                  </div>
-                </div>
-              )}
-            </div>
-            <Button type="submit" fullWidth disabled={!description.trim()}>Submit activity</Button>
-          </form>
+              <Button type="submit" fullWidth disabled={!description.trim() || inProgress.length === 0}>Submit activity</Button>
+            </form>
+          )}
         </CardContent>
       </Card>
 

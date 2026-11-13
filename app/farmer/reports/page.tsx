@@ -16,7 +16,7 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import { Leaf, Droplets, Sprout, Bug, Wind } from "lucide-react";
+import { Leaf, Droplets, Sprout, Bug, Wind, Zap } from "lucide-react";
 
 export default function ReportsPage() {
   const { farmer, challenges } = useDemo();
@@ -40,6 +40,7 @@ export default function ReportsPage() {
     "Crop diversity": Leaf,
     "Integrated pest management": Bug,
     "Biodiversity": Wind,
+    "Energy efficiency": Zap,
   };
 
   return (
