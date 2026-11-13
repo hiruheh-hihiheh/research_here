@@ -8,11 +8,14 @@ import type {
   DemoState,
   FarmerProfile,
   Submission,
+  SustainabilityCategory,
 } from "./types";
 import {
   BADGES,
   INITIAL_DEMO_STATE,
+  INITIAL_CHALLENGES,
   STORAGE_KEY,
+  OLD_STORAGE_KEY,
   levelForXp,
   nextLevelForXp,
 } from "./mockData";
@@ -56,8 +59,10 @@ function seed(): DemoState {
 
 function unlockBadges(state: DemoState): string[] {
   const f = state.farmer;
-  const badges = new Set(f.badges);
-  const completedChallenges = state.challenges.filter((c) => c.status === "completed" && f.completedChallenges.includes(c.id));
+  const badges = new Set<string>();
+  const completedChallenges = f.completedChallenges
+    .map((id) => state.challenges.find((c) => c.id === id) ?? INITIAL_CHALLENGES.find((c) => c.id === id))
+    .filter((c): c is Challenge => Boolean(c));
   const waterDone = completedChallenges.some((c) => c.category === "Water conservation");
   const soilDone = completedChallenges.some((c) => c.category === "Soil health");
   const organicDone = completedChallenges.some((c) => c.category === "Organic farming");
@@ -75,6 +80,75 @@ function unlockBadges(state: DemoState): string[] {
   return Array.from(badges);
 }
 
+const SUSTAINABILITY_CATEGORIES: SustainabilityCategory[] = [
+  "Water conservation",
+  "Soil health",
+  "Crop diversity",
+  "Integrated pest management",
+  "Biodiversity",
+  "Energy efficiency",
+];
+
+function normalizeNumber(v: unknown, fallback = 0): number {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizeState(loaded: unknown): DemoState {
+  const seed = clone(INITIAL_DEMO_STATE);
+  const next: DemoState = clone(seed);
+  if (loaded && typeof loaded === "object") {
+    const data = loaded as Record<string, unknown>;
+    next.role = data.role === "admin" ? "admin" : "farmer";
+    if (data.farmer && typeof data.farmer === "object") {
+      next.farmer = { ...seed.farmer, ...(data.farmer as Record<string, unknown>) } as FarmerProfile;
+    }
+    if (Array.isArray(data.challenges)) next.challenges = data.challenges as Challenge[];
+    if (Array.isArray(data.submissions)) next.submissions = data.submissions as Submission[];
+    if (Array.isArray(data.completedLessons)) next.completedLessons = data.completedLessons as string[];
+    if (Array.isArray(data.lessonXpAwarded)) next.lessonXpAwarded = data.lessonXpAwarded as string[];
+  }
+
+  // XP/level consistency
+  next.farmer.xp = normalizeNumber(next.farmer.xp, seed.farmer.xp);
+  next.farmer.level = levelForXp(next.farmer.xp).level;
+
+  // sustainability progress completeness
+  const sp = (next.farmer.sustainabilityProgress ?? {}) as Record<string, unknown>;
+  const normalized: FarmerProfile["sustainabilityProgress"] = { ...seed.farmer.sustainabilityProgress };
+  SUSTAINABILITY_CATEGORIES.forEach((cat) => {
+    normalized[cat] = normalizeNumber(sp[cat], seed.farmer.sustainabilityProgress[cat] ?? 0);
+  });
+  next.farmer.sustainabilityProgress = normalized;
+  next.farmer.sustainabilityScore = Math.round(
+    Object.values(normalized).reduce((a, b) => a + b, 0) / Object.values(normalized).length
+  );
+
+  // reconcile lessons
+  const lessons = new Set([...next.completedLessons, ...next.lessonXpAwarded]);
+  next.completedLessons = Array.from(lessons);
+  next.lessonXpAwarded = Array.from(lessons);
+  next.farmer.completedLessons = Array.from(lessons);
+
+  // reconcile completed challenges with challenge statuses
+  const completedIds = new Set(next.farmer.completedChallenges);
+  next.challenges.forEach((ch) => {
+    if (ch.status === "completed") completedIds.add(ch.id);
+  });
+  completedIds.forEach((id) => {
+    const ch = next.challenges.find((c) => c.id === id);
+    if (ch) ch.status = "completed";
+  });
+  next.farmer.completedChallenges = Array.from(completedIds);
+  next.farmer.inProgressChallenges = next.farmer.inProgressChallenges.filter((id) => !completedIds.has(id));
+
+  return next;
+}
+
+function migrateOldState(old: unknown): DemoState {
+  return normalizeState(old);
+}
+
 function applyUnlock(state: DemoState): DemoState {
   const next = clone(state);
   next.farmer.badges = unlockBadges(next);
@@ -89,9 +163,15 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const loaded = loadState<DemoState>(STORAGE_KEY);
+      let loaded = loadState<DemoState>(STORAGE_KEY);
+      if (!loaded) {
+        const old = loadState<unknown>(OLD_STORAGE_KEY);
+        if (old) {
+          loaded = migrateOldState(old);
+        }
+      }
       if (loaded) {
-        setState((prev) => ({ ...prev, ...loaded, farmer: { ...prev.farmer, ...loaded.farmer }, challenges: loaded.challenges ?? prev.challenges }));
+        setState(() => applyUnlock(normalizeState(loaded)));
       }
       setReady(true);
     }, 0);
@@ -110,7 +190,10 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
     const fresh = seed();
     setState(fresh);
     if (typeof window !== "undefined") {
-      try { window.localStorage.removeItem(STORAGE_KEY); } catch {}
+      try {
+        window.localStorage.removeItem(STORAGE_KEY);
+        window.localStorage.removeItem(OLD_STORAGE_KEY);
+      } catch {}
     }
   }, []);
 
@@ -127,10 +210,12 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const submitActivity = useCallback((payload: { challengeId: string; description: string; imageDataUrl: string | null }) => {
+    const ch = state.challenges.find((c) => c.id === payload.challengeId);
     const submission: Submission = {
       id: `sub-${Date.now()}`,
       farmerId: "farmer-demo-1",
       challengeId: payload.challengeId,
+      challengeTitle: ch?.title,
       description: payload.description,
       imageDataUrl: payload.imageDataUrl,
       status: "pending",
@@ -142,7 +227,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
       return applyUnlock(next);
     });
     return submission;
-  }, []);
+  }, [state.challenges]);
 
   const completeLesson = useCallback((lessonId: string, xpReward: number) => {
     const alreadyAwarded = state.lessonXpAwarded.includes(lessonId);

@@ -9,7 +9,7 @@ export type ChallengeCategory =
 
 export type ChallengeDifficulty = "Beginner" | "Intermediate" | "Advanced";
 
-export type ChallengeStatus = "available" | "in-progress" | "completed";
+export type ChallengeStatus = "available" | "in-progress" | "completed" | "archived";
 
 export interface Challenge {
   id: string;
@@ -81,6 +81,7 @@ export interface Submission {
   id: string;
   farmerId: string;
   challengeId: string;
+  challengeTitle?: string;
   description: string;
   imageDataUrl: string | null;
   status: "pending" | "approved" | "rejected";

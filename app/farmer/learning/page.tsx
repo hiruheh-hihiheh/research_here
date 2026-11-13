@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import { useDemo } from "@/features/demo/DemoContext";
-import { Card, CardContent } from "@/components/ui/Card";
+import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { LESSONS } from "@/features/demo/mockData";
-import { BookOpen, Clock, CheckCircle2, XCircle } from "lucide-react";
+import { Clock, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const PASS_THRESHOLD = 0.6;

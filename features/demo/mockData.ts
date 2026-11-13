@@ -1,7 +1,6 @@
 import type {
   Badge,
   Challenge,
-  ChallengeCategory,
   DemoState,
   FarmerProfile,
   LeaderboardEntry,
@@ -350,4 +349,5 @@ export const INITIAL_DEMO_STATE: DemoState = {
   lessonXpAwarded: INITIAL_FARMER.completedLessons,
 };
 
-export const STORAGE_KEY = "agriquest-demo-state-v1";
+export const STORAGE_KEY = "agriquest-demo-state-v2";
+export const OLD_STORAGE_KEY = "agriquest-demo-state-v1";

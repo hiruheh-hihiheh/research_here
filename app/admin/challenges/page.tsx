@@ -113,13 +113,12 @@ export default function AdminChallengesPage() {
                 </div>
                 <div className="flex gap-1">
                   <select
-                    value={c.status}
+                    value={c.status === "archived" ? "archived" : "available"}
                     onChange={(e) => updateChallenge(c.id, { status: e.target.value as Challenge["status"] })}
                     className="h-9 rounded-lg border border-border bg-card px-2 text-xs"
                   >
                     <option value="available">available</option>
-                    <option value="in-progress">in-progress</option>
-                    <option value="completed">completed</option>
+                    <option value="archived">archived</option>
                   </select>
                   <Button size="sm" variant="ghost" onClick={() => openEdit(c)}>
                     <Pencil className="h-4 w-4" />
@@ -180,10 +179,9 @@ export default function AdminChallengesPage() {
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">Status</label>
-            <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Challenge["status"] })}>
+            <Select value={form.status === "archived" ? "archived" : "available"} onChange={(e) => setForm({ ...form, status: e.target.value as Challenge["status"] })}>
               <option value="available">available</option>
-              <option value="in-progress">in-progress</option>
-              <option value="completed">completed</option>
+              <option value="archived">archived</option>
             </Select>
           </div>
           <div className="flex gap-2 pt-2">

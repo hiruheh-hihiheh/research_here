@@ -17,7 +17,6 @@ import {
   Droplets,
   Leaf,
   Bug,
-  RefreshCw,
   Wind,
 } from "lucide-react";
 import {

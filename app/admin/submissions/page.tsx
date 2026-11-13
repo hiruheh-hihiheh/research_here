@@ -52,7 +52,7 @@ export default function AdminSubmissionsPage() {
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="truncate font-medium">{c?.title ?? s.challengeId}</p>
+                      <p className="truncate font-medium">{s.challengeTitle ?? c?.title ?? s.challengeId}</p>
                       <Badge variant={s.status === "approved" ? "success" : s.status === "rejected" ? "danger" : "amber"}>
                         {s.status}
                       </Badge>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useDemo } from "@/features/demo/DemoContext";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
+import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card";
 import { Progress } from "@/components/ui/Progress";
 import { Badge } from "@/components/ui/Badge";
 import {

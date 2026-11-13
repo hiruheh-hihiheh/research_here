@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { useDemo } from "@/features/demo/DemoContext";
 import { Card, CardContent } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
+
 import { Avatar } from "@/components/ui/Avatar";
 import { LEADERBOARD } from "@/features/demo/mockData";
-import { Trophy, Globe, Calendar, CalendarDays } from "lucide-react";
+import { Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = ["Weekly", "Monthly", "Global"] as const;

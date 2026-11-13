@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Progress } from "@/components/ui/Progress";
 import { Challenge } from "@/features/demo/types";
 import Link from "next/link";
-import { Target, Search, Clock, Zap, CheckCircle2, PlayCircle, ListChecks } from "lucide-react";
+import { Target, Search, Clock, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const CATEGORIES = ["All", "Water conservation", "Soil health", "Organic farming", "Crop rotation", "Integrated pest management", "Biodiversity", "Energy efficiency"];
@@ -31,6 +31,7 @@ export default function ChallengesPage() {
 
   const filtered = useMemo(() => {
     return challenges.filter((c) => {
+      if (c.status === "archived") return false;
       if (c.status !== tab) return false;
       if (category !== "All" && c.category !== category) return false;
       if (query && !`${c.title} ${c.description} ${c.category}`.toLowerCase().includes(query.toLowerCase())) return false;

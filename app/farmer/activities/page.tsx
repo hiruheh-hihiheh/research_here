@@ -13,7 +13,7 @@ import { UploadCloud, Image as ImageIcon, CheckCircle2, Clock, XCircle, AlertCir
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 export default function ActivitiesPage() {
-  const { challenges, submissions, submitActivity, startChallenge } = useDemo();
+  const { challenges, submissions, submitActivity } = useDemo();
   const inProgress = challenges.filter((c) => c.status === "in-progress");
   const [challengeId, setChallengeId] = useState(inProgress[0]?.id ?? "");
   const [description, setDescription] = useState("");
@@ -22,9 +22,10 @@ export default function ActivitiesPage() {
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // keep selection valid
-  const selectedChallenge = inProgress.find((c) => c.id === challengeId) ?? inProgress[0];
-  if (selectedChallenge && selectedChallenge.id !== challengeId) setChallengeId(selectedChallenge.id);
+  const selectedChallengeId = inProgress.some((c) => c.id === challengeId)
+    ? challengeId
+    : inProgress[0]?.id ?? "";
+  const selectedChallenge = inProgress.find((c) => c.id === selectedChallengeId);
 
   const handleFile = (file: File | null) => {
     setError(null);
@@ -97,7 +98,7 @@ export default function ActivitiesPage() {
             <form onSubmit={handleSubmit} className="space-y-3">
               <div>
                 <label className="mb-1 block text-sm font-medium">Challenge</label>
-                <Select value={selectedChallenge?.id ?? ""} onChange={(e) => setChallengeId(e.target.value)}>
+                <Select value={selectedChallengeId} onChange={(e) => setChallengeId(e.target.value)}>
                   {inProgress.map((c) => (
                     <option key={c.id} value={c.id}>{c.title}</option>
                   ))}
@@ -173,7 +174,7 @@ export default function ActivitiesPage() {
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="truncate font-medium">{ch?.title ?? s.challengeId}</p>
+                        <p className="truncate font-medium">{s.challengeTitle ?? ch?.title ?? s.challengeId}</p>
                         {statusBadge(s.status)}
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{s.description}</p>
