@@ -73,8 +73,16 @@ export default function AdminChallengesPage() {
     }
   };
 
+  const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
+
   const handleDelete = (id: string) => {
-    if (confirm("Delete this demo challenge?")) deleteChallenge(id);
+    if (!confirm("Delete this demo challenge?")) return;
+    const ok = deleteChallenge(id);
+    if (!ok) {
+      setDeleteMessage("Cannot delete a challenge with pending submissions. Review them first.");
+    } else {
+      setDeleteMessage(null);
+    }
   };
 
   const modalOpen = creating || !!editing;
@@ -90,6 +98,10 @@ export default function AdminChallengesPage() {
           <Plus className="h-4 w-4" /> Add challenge
         </Button>
       </div>
+
+      {deleteMessage && (
+        <div className="rounded-xl bg-amber-50 px-4 py-2 text-sm text-amber-800">{deleteMessage}</div>
+      )}
 
       {challenges.length === 0 ? (
         <EmptyState title="No challenges" description="Add a demo challenge to get started." icon={Target} />
@@ -112,14 +124,20 @@ export default function AdminChallengesPage() {
                   </div>
                 </div>
                 <div className="flex gap-1">
-                  <select
-                    value={c.status === "archived" ? "archived" : "available"}
-                    onChange={(e) => updateChallenge(c.id, { status: e.target.value as Challenge["status"] })}
-                    className="h-9 rounded-lg border border-border bg-card px-2 text-xs"
-                  >
-                    <option value="available">available</option>
-                    <option value="archived">archived</option>
-                  </select>
+                  {c.status === "in-progress" || c.status === "completed" ? (
+                    <span className="rounded-lg border border-border bg-sage/40 px-2 py-1 text-xs font-medium text-primary-dark">
+                      {c.status}
+                    </span>
+                  ) : (
+                    <select
+                      value={c.status === "archived" ? "archived" : "available"}
+                      onChange={(e) => updateChallenge(c.id, { status: e.target.value as Challenge["status"] })}
+                      className="h-9 rounded-lg border border-border bg-card px-2 text-xs"
+                    >
+                      <option value="available">available</option>
+                      <option value="archived">archived</option>
+                    </select>
+                  )}
                   <Button size="sm" variant="ghost" onClick={() => openEdit(c)}>
                     <Pencil className="h-4 w-4" />
                   </Button>
@@ -179,10 +197,14 @@ export default function AdminChallengesPage() {
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">Status</label>
-            <Select value={form.status === "archived" ? "archived" : "available"} onChange={(e) => setForm({ ...form, status: e.target.value as Challenge["status"] })}>
-              <option value="available">available</option>
-              <option value="archived">archived</option>
-            </Select>
+            {form.status === "in-progress" || form.status === "completed" ? (
+              <p className="rounded-lg border border-border bg-sage/40 px-3 py-2 text-sm text-primary-dark">{form.status} (protected)</p>
+            ) : (
+              <Select value={form.status === "archived" ? "archived" : "available"} onChange={(e) => setForm({ ...form, status: e.target.value as Challenge["status"] })}>
+                <option value="available">available</option>
+                <option value="archived">archived</option>
+              </Select>
+            )}
           </div>
           <div className="flex gap-2 pt-2">
             <Button onClick={handleSave} fullWidth disabled={!form.title.trim()}>
