@@ -126,7 +126,8 @@ export function normalizeState(loaded: unknown): DemoState {
           const id = typeof r.id === "string" && r.id.trim() ? r.id : null;
           const title = typeof r.title === "string" && r.title.trim() ? r.title : null;
           const description = typeof r.description === "string" ? r.description : "";
-          const category = typeof r.category === "string" ? r.category : null;
+          const SUPPORTED_CATEGORIES: Challenge["category"][] = ["Water conservation", "Soil health", "Organic farming", "Crop rotation", "Integrated pest management", "Biodiversity", "Energy efficiency"];
+          const category = SUPPORTED_CATEGORIES.find((c) => c === r.category) ?? null;
           const difficulty = r.difficulty === "Beginner" || r.difficulty === "Intermediate" || r.difficulty === "Advanced" ? r.difficulty : "Beginner";
           const xpReward = typeof r.xpReward === "number" && Number.isFinite(r.xpReward) && r.xpReward >= 0 ? r.xpReward : 0;
           const duration = typeof r.duration === "string" ? r.duration : "1 week";
@@ -138,7 +139,7 @@ export function normalizeState(loaded: unknown): DemoState {
             id,
             title,
             description,
-            category: category as Challenge["category"],
+            category,
             difficulty,
             xpReward,
             duration,

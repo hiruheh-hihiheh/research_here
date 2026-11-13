@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { clone, normalizeState, completeLessonState, startChallengeState, updateChallengeState, deleteChallengeState, submitActivityState, reviewSubmissionState } from "./logic";
 import { INITIAL_DEMO_STATE } from "./mockData";
-import type { FarmerProfile, Challenge } from "./types";
+import type { FarmerProfile, Challenge, DemoState } from "./types";
 
 describe("migration", () => {
   it("fills missing sustainability categories and preserves valid values", () => {
@@ -60,6 +60,42 @@ describe("migration", () => {
     expect(Array.isArray(next.farmer.inProgressChallenges)).toBe(true);
     expect(Array.isArray(next.farmer.badges)).toBe(true);
     expect(Array.isArray(next.farmer.completedLessons)).toBe(true);
+  });
+
+  it("valid category preserved", () => {
+    const old = clone(INITIAL_DEMO_STATE);
+    old.challenges = [
+      { id: "v", title: "V", category: "Soil health", difficulty: "Beginner", xpReward: 5, duration: "1w", objectives: [], instructions: [], status: "available" },
+    ] as unknown as Challenge[];
+    const next = normalizeState(old);
+    expect(next.challenges.find((c) => c.id === "v")?.category).toBe("Soil health");
+  });
+
+  it("unsupported string category dropped", () => {
+    const old = clone(INITIAL_DEMO_STATE);
+    old.challenges = [
+      { id: "u", title: "U", category: "Not a category", difficulty: "Beginner", xpReward: 5, duration: "1w", objectives: [], instructions: [], status: "available" },
+    ] as unknown as Challenge[];
+    const next = normalizeState(old);
+    expect(next.challenges.find((c) => c.id === "u")).toBeUndefined();
+  });
+
+  it("missing category dropped", () => {
+    const old = clone(INITIAL_DEMO_STATE);
+    old.challenges = [
+      { id: "m", title: "M", difficulty: "Beginner", xpReward: 5, duration: "1w", objectives: [], instructions: [], status: "available" },
+    ] as unknown as Challenge[];
+    const next = normalizeState(old);
+    expect(next.challenges.find((c) => c.id === "m")).toBeUndefined();
+  });
+
+  it("non-string category dropped", () => {
+    const old = clone(INITIAL_DEMO_STATE);
+    old.challenges = [
+      { id: "n", title: "N", category: 42, difficulty: "Beginner", xpReward: 5, duration: "1w", objectives: [], instructions: [], status: "available" },
+    ] as unknown as Challenge[];
+    const next = normalizeState(old);
+    expect(next.challenges.find((c) => c.id === "n")).toBeUndefined();
   });
 
   it("malformed challenge records are dropped", () => {
@@ -182,9 +218,9 @@ describe("review lifecycle", () => {
     const beforeSoil = state.farmer.sustainabilityProgress["Soil health"];
     const subRes = submitActivityState(state, { challengeId: ch.id, description: "work", imageDataUrl: null });
     expect(subRes.success).toBe(true);
-    if (!subRes.success) return;
-    const subId = subRes.submission.id;
-    const approved = reviewSubmissionState(subRes.state, subId, true);
+    const successRes = subRes as { success: true; state: DemoState; submission: { id: string } };
+    const subId = successRes.submission.id;
+    const approved = reviewSubmissionState(successRes.state, subId, true);
     const sub = approved.submissions.find((s) => s.id === subId)!;
     expect(sub.status).toBe("approved");
     expect(approved.farmer.xp).toBe(beforeXp + ch.xpReward);
@@ -201,8 +237,9 @@ describe("review lifecycle", () => {
     const beforeXp = state.farmer.xp;
     const beforeSoil = state.farmer.sustainabilityProgress["Soil health"];
     const subRes = submitActivityState(state, { challengeId: ch.id, description: "work", imageDataUrl: null });
-    if (!subRes.success) return;
-    const rejected = reviewSubmissionState(subRes.state, subRes.submission.id, false);
+    expect(subRes.success).toBe(true);
+    const successRes = subRes as { success: true; state: DemoState; submission: { id: string } };
+    const rejected = reviewSubmissionState(successRes.state, successRes.submission.id, false);
     expect(rejected.farmer.xp).toBe(beforeXp);
     expect(rejected.farmer.sustainabilityProgress["Soil health"]).toBe(beforeSoil);
   });
