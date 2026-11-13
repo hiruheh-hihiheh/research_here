@@ -20,13 +20,12 @@ export function clone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v));
 }
 
-export const MAX_AGGREGATE_IMAGE_BYTES = 4 * 1024 * 1024;
+export const MAX_AGGREGATE_IMAGE_BYTES = 2 * 1024 * 1024;
 
 export function estimateDataUrlBytes(dataUrl: string | null): number {
   if (!dataUrl) return 0;
-  const comma = dataUrl.indexOf(",");
-  const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
-  return Math.ceil((base64.length * 3) / 4);
+  // localStorage stores the full data URL string, so budget by encoded character size.
+  return dataUrl.length;
 }
 
 const SUSTAINABILITY_CATEGORIES: SustainabilityCategory[] = [
@@ -382,8 +381,8 @@ export function addChallengeState(state: DemoState, challenge: Omit<Challenge, "
     title: challenge.title.trim(),
     description: challenge.description.trim(),
     duration: challenge.duration.trim(),
-    objectives: challenge.objectives.map((x) => x.trim()).filter(Boolean),
-    instructions: challenge.instructions.map((x) => x.trim()).filter(Boolean),
+    objectives: challenge.objectives.filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean),
+    instructions: challenge.instructions.filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean),
   };
   const next = clone(state);
   next.challenges = [newCh, ...next.challenges];
@@ -416,8 +415,8 @@ export function updateChallengeState(state: DemoState, id: string, patch: Partia
   if (safePatch.title) safePatch.title = safePatch.title.trim();
   if (safePatch.description) safePatch.description = safePatch.description.trim();
   if (safePatch.duration) safePatch.duration = safePatch.duration.trim();
-  if (safePatch.objectives) safePatch.objectives = safePatch.objectives.map((x) => x.trim()).filter(Boolean);
-  if (safePatch.instructions) safePatch.instructions = safePatch.instructions.map((x) => x.trim()).filter(Boolean);
+  if (safePatch.objectives) safePatch.objectives = safePatch.objectives.filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean);
+  if (safePatch.instructions) safePatch.instructions = safePatch.instructions.filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean);
   Object.assign(ch, safePatch);
   return { state: next };
 }

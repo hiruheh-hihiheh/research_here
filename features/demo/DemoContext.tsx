@@ -117,10 +117,13 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
 
   const submitActivity = useCallback((payload: { challengeId: string; description: string; imageDataUrl: string | null }) => {
     const result = submitActivityState(stateRef.current, payload);
-    if (result.success) {
-      stateRef.current = result.state;
-      setState(result.state);
+    if (!result.success) return result;
+    const persisted = saveState(STORAGE_KEY, result.state);
+    if (!persisted) {
+      return { success: false as const, state: stateRef.current, error: "Evidence could not be saved to browser storage. Try a smaller image." };
     }
+    stateRef.current = result.state;
+    setState(result.state);
     return result;
   }, []);
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { clone, normalizeState, completeLessonState, startChallengeState, updateChallengeState, deleteChallengeState, submitActivityState, reviewSubmissionState, validateChallengeInput, addChallengeState, countActiveChallenges } from "./logic";
+import { clone, normalizeState, completeLessonState, startChallengeState, updateChallengeState, deleteChallengeState, submitActivityState, reviewSubmissionState, validateChallengeInput, addChallengeState, countActiveChallenges, estimateDataUrlBytes, MAX_AGGREGATE_IMAGE_BYTES } from "./logic";
 import { INITIAL_DEMO_STATE } from "./mockData";
 import type { FarmerProfile, Challenge } from "./types";
 
@@ -300,8 +300,110 @@ describe("challenge validation", () => {
   });
 });
 
+describe("storage helpers", () => {
+  it("estimates data URL size by encoded length", () => {
+    const url = "data:image/png;base64,AAAA";
+    expect(estimateDataUrlBytes(url)).toBe(url.length);
+    expect(estimateDataUrlBytes(null)).toBe(0);
+  });
+
+  it("accepts aggregate budget", () => {
+    const state = clone(INITIAL_DEMO_STATE);
+    const ip = state.challenges.find((c) => c.status === "in-progress")!;
+    const small = "data:image/png;base64," + "A".repeat(100);
+    const res = submitActivityState(state, { challengeId: ip.id, description: "work", imageDataUrl: small });
+    expect(res.success).toBe(true);
+  });
+
+  it("rejects aggregate budget", () => {
+    const state = clone(INITIAL_DEMO_STATE);
+    const ip = state.challenges.find((c) => c.status === "in-progress")!;
+    const big = "data:image/png;base64," + "A".repeat(MAX_AGGREGATE_IMAGE_BYTES + 10);
+    const res = submitActivityState(state, { challengeId: ip.id, description: "work", imageDataUrl: big });
+    expect(res.success).toBe(false);
+    if (!res.success) expect(res.error).toContain("budget");
+  });
+
+  it("state unchanged on rejected submission", () => {
+    const state = clone(INITIAL_DEMO_STATE);
+    const ip = state.challenges.find((c) => c.status === "in-progress")!;
+    const before = state.submissions.length;
+    const big = "data:image/png;base64," + "A".repeat(MAX_AGGREGATE_IMAGE_BYTES + 10);
+    const res = submitActivityState(state, { challengeId: ip.id, description: "work", imageDataUrl: big });
+    expect(res.success).toBe(false);
+    expect(res.state.submissions.length).toBe(before);
+  });
+});
+
 describe("malformed state", () => {
-  it("does not crash on invalid collections", () => {
+describe("challenge validation extra", () => {
+  const valid = {
+    title: "Test Challenge",
+    description: "A sufficiently long description for validation.",
+    category: "Soil health",
+    difficulty: "Beginner",
+    xpReward: 10,
+    duration: "1 week",
+    objectives: ["Do thing"],
+    instructions: ["Step one"],
+  };
+
+  it("filters mixed objectives", () => {
+    const input = { ...valid, objectives: ["  ok  ", 42, "", null] };
+    const res = validateChallengeInput(input);
+    expect(res.valid).toBe(true);
+    const stateRes = addChallengeState(INITIAL_DEMO_STATE, input as Parameters<typeof addChallengeState>[1]);
+    expect(stateRes.challenge?.objectives).toEqual(["ok"]);
+  });
+
+  it("filters mixed instructions", () => {
+    const input = { ...valid, instructions: ["  step  ", 7, "   "] };
+    const res = validateChallengeInput(input);
+    expect(res.valid).toBe(true);
+    const stateRes = addChallengeState(INITIAL_DEMO_STATE, input as Parameters<typeof addChallengeState>[1]);
+    expect(stateRes.challenge?.instructions).toEqual(["step"]);
+  });
+
+  it("rejects whitespace-only objectives", () => {
+    expect(validateChallengeInput({ ...valid, objectives: ["   "] }).valid).toBe(false);
+  });
+
+  it("rejects whitespace-only instructions", () => {
+    expect(validateChallengeInput({ ...valid, instructions: ["   "] }).valid).toBe(false);
+  });
+
+  it("rejects invalid category and difficulty", () => {
+    expect(validateChallengeInput({ ...valid, category: "Nope" }).valid).toBe(false);
+    expect(validateChallengeInput({ ...valid, difficulty: "Hard" }).valid).toBe(false);
+  });
+
+  it("rejects invalid XP values", () => {
+    expect(validateChallengeInput({ ...valid, xpReward: 1.5 }).valid).toBe(false);
+    expect(validateChallengeInput({ ...valid, xpReward: NaN }).valid).toBe(false);
+    expect(validateChallengeInput({ ...valid, xpReward: Infinity }).valid).toBe(false);
+    expect(validateChallengeInput({ ...valid, xpReward: 0 }).valid).toBe(false);
+    expect(validateChallengeInput({ ...valid, xpReward: -3 }).valid).toBe(false);
+  });
+
+  it("rejects invalid update", () => {
+    const state = clone(INITIAL_DEMO_STATE);
+    const ch = state.challenges.find((c) => c.status === "available")!;
+    const res = updateChallengeState(state, ch.id, { xpReward: 0 });
+    expect(res.error).toBeTruthy();
+  });
+
+  it("valid edit preserves protected status", () => {
+    const state = clone(INITIAL_DEMO_STATE);
+    const ip = state.challenges.find((c) => c.status === "in-progress")!;
+    const res = updateChallengeState(state, ip.id, { title: "Updated Title Long Enough", status: "archived" });
+    expect(res.error).toBeUndefined();
+    const updated = res.state.challenges.find((c) => c.id === ip.id)!;
+    expect(updated.title).toBe("Updated Title Long Enough");
+    expect(updated.status).toBe("in-progress");
+  });
+});
+
+describe("malformed state", () => {
     const old = clone(INITIAL_DEMO_STATE);
     (old as unknown as Record<string, unknown>).completedChallenges = "bad";
     (old as unknown as Record<string, unknown>).submissions = [{ foo: 1 }];
