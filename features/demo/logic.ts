@@ -71,8 +71,36 @@ export function normalizeState(loaded: unknown): DemoState {
     if (data.farmer && typeof data.farmer === "object") {
       next.farmer = { ...seed.farmer, ...(data.farmer as Record<string, unknown>) } as FarmerProfile;
     }
+    // safe defaults for farmer fields
+    next.farmer.id = next.farmer.id || seed.farmer.id;
+    next.farmer.name = next.farmer.name || seed.farmer.name;
+    next.farmer.farmName = next.farmer.farmName || seed.farmer.farmName;
+    next.farmer.location = next.farmer.location || seed.farmer.location;
+    next.farmer.country = next.farmer.country || seed.farmer.country;
+    next.farmer.avatar = next.farmer.avatar || seed.farmer.avatar;
+    next.farmer.season = next.farmer.season || seed.farmer.season;
     if (Array.isArray(data.challenges)) next.challenges = data.challenges as Challenge[];
-    if (Array.isArray(data.submissions)) next.submissions = data.submissions as Submission[];
+    if (Array.isArray(data.submissions)) {
+      next.submissions = (data.submissions as Submission[]).map((s) => {
+        const safe: Submission = {
+          id: s?.id ?? `sub-${Math.random()}`,
+          farmerId: s?.farmerId ?? "farmer-demo-1",
+          challengeId: s?.challengeId ?? "",
+          description: s?.description ?? "",
+          imageDataUrl: s?.imageDataUrl ?? null,
+          status: s?.status === "approved" || s?.status === "rejected" ? s.status : "pending",
+          submittedAt: s?.submittedAt ?? new Date().toISOString(),
+          reviewedAt: s?.reviewedAt,
+          reviewNote: s?.reviewNote,
+          challengeTitle: s?.challengeTitle,
+        };
+        if (!safe.challengeTitle) {
+          const ch = next.challenges.find((c) => c.id === safe.challengeId) ?? INITIAL_CHALLENGES.find((c) => c.id === safe.challengeId);
+          safe.challengeTitle = ch?.title;
+        }
+        return safe;
+      });
+    }
     if (Array.isArray(data.completedLessons)) next.completedLessons = data.completedLessons as string[];
     if (Array.isArray(data.lessonXpAwarded)) next.lessonXpAwarded = data.lessonXpAwarded as string[];
   }
@@ -109,13 +137,22 @@ export function normalizeState(loaded: unknown): DemoState {
   return applyUnlock(next);
 }
 
-export function submitActivityState(state: DemoState, payload: { challengeId: string; description: string; imageDataUrl: string | null }): { state: DemoState; submission: Submission } {
+export function submitActivityState(
+  state: DemoState,
+  payload: { challengeId: string; description: string; imageDataUrl: string | null }
+): { state: DemoState; submission: Submission | null; error?: string } {
   const ch = state.challenges.find((c) => c.id === payload.challengeId);
+  if (!ch) {
+    return { state: clone(state), submission: null, error: "Unknown challenge." };
+  }
+  if (ch.status !== "in-progress") {
+    return { state: clone(state), submission: null, error: "Activities can only be submitted for in-progress challenges." };
+  }
   const submission: Submission = {
     id: `sub-${Date.now()}`,
     farmerId: "farmer-demo-1",
     challengeId: payload.challengeId,
-    challengeTitle: ch?.title,
+    challengeTitle: ch.title,
     description: payload.description,
     imageDataUrl: payload.imageDataUrl,
     status: "pending",
@@ -223,9 +260,21 @@ export function updateChallengeState(state: DemoState, id: string, patch: Partia
   return next;
 }
 
-export function deleteChallengeState(state: DemoState, id: string): { state: DemoState; deleted: boolean } {
+export function deleteChallengeState(state: DemoState, id: string): { state: DemoState; deleted: boolean; reason?: string } {
+  const ch = state.challenges.find((c) => c.id === id);
+  if (!ch) {
+    return { state: clone(state), deleted: false, reason: "Challenge not found." };
+  }
+  if (ch.status === "in-progress") {
+    return { state: clone(state), deleted: false, reason: "In-progress challenges cannot be deleted." };
+  }
+  if (ch.status === "completed") {
+    return { state: clone(state), deleted: false, reason: "Completed challenges cannot be deleted." };
+  }
   const hasPending = state.submissions.some((s) => s.challengeId === id && s.status === "pending");
-  if (hasPending) return { state: clone(state), deleted: false };
+  if (hasPending) {
+    return { state: clone(state), deleted: false, reason: "Pending submissions must be reviewed first." };
+  }
   const next = clone(state);
   next.challenges = next.challenges.filter((c) => c.id !== id);
   return { state: next, deleted: true };

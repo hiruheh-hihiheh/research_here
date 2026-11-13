@@ -39,12 +39,12 @@ interface DemoContextValue {
   challenges: DemoState["challenges"];
   submissions: DemoState["submissions"];
   startChallenge: (id: string) => void;
-  submitActivity: (payload: { challengeId: string; description: string; imageDataUrl: string | null }) => Submission;
+  submitActivity: (payload: { challengeId: string; description: string; imageDataUrl: string | null }) => Submission | null;
   completeLesson: (lessonId: string, xpReward: number) => { awarded: boolean; xp: number };
   reviewSubmission: (id: string, approved: boolean, note?: string) => void;
   addChallenge: (challenge: Omit<Challenge, "id" | "status"> & { status?: Challenge["status"] }) => Challenge;
   updateChallenge: (id: string, patch: Partial<Challenge>) => void;
-  deleteChallenge: (id: string) => boolean;
+  deleteChallenge: (id: string) => { deleted: boolean; reason?: string };
   levelInfo: ReturnType<typeof import("./mockData").levelForXp>;
   nextLevel: ReturnType<typeof import("./mockData").nextLevelForXp>;
   xpToNext: number;
@@ -110,9 +110,11 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
 
   const submitActivity = useCallback((payload: { challengeId: string; description: string; imageDataUrl: string | null }) => {
     const { state: next, submission } = submitActivityState(stateRef.current, payload);
-    stateRef.current = next;
-    setState(next);
-    return submission;
+    if (submission) {
+      stateRef.current = next;
+      setState(next);
+    }
+    return submission as Submission;
   }, []);
 
   const completeLesson = useCallback((lessonId: string, xpReward: number) => {
@@ -143,12 +145,12 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const deleteChallenge = useCallback((id: string) => {
-    const { state: next, deleted } = deleteChallengeState(stateRef.current, id);
+    const { state: next, deleted, reason } = deleteChallengeState(stateRef.current, id);
     if (deleted) {
       stateRef.current = next;
       setState(next);
     }
-    return deleted;
+    return { deleted, reason };
   }, []);
 
   const value = useMemo<DemoContextValue>(() => {

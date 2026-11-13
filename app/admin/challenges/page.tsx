@@ -77,9 +77,9 @@ export default function AdminChallengesPage() {
 
   const handleDelete = (id: string) => {
     if (!confirm("Delete this demo challenge?")) return;
-    const ok = deleteChallenge(id);
-    if (!ok) {
-      setDeleteMessage("Cannot delete a challenge with pending submissions. Review them first.");
+    const result = deleteChallenge(id);
+    if (!result.deleted) {
+      setDeleteMessage(result.reason ?? "Challenge could not be deleted.");
     } else {
       setDeleteMessage(null);
     }
