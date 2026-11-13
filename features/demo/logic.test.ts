@@ -335,7 +335,6 @@ describe("storage helpers", () => {
   });
 });
 
-describe("malformed state", () => {
 describe("challenge validation extra", () => {
   const valid = {
     title: "Test Challenge",
