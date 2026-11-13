@@ -71,7 +71,6 @@ export function normalizeState(loaded: unknown): DemoState {
     if (data.farmer && typeof data.farmer === "object") {
       next.farmer = { ...seed.farmer, ...(data.farmer as Record<string, unknown>) } as FarmerProfile;
     }
-    // safe defaults for farmer fields
     next.farmer.id = next.farmer.id || seed.farmer.id;
     next.farmer.name = next.farmer.name || seed.farmer.name;
     next.farmer.farmName = next.farmer.farmName || seed.farmer.farmName;
@@ -79,20 +78,38 @@ export function normalizeState(loaded: unknown): DemoState {
     next.farmer.country = next.farmer.country || seed.farmer.country;
     next.farmer.avatar = next.farmer.avatar || seed.farmer.avatar;
     next.farmer.season = next.farmer.season || seed.farmer.season;
-    if (Array.isArray(data.challenges)) next.challenges = data.challenges as Challenge[];
+
+    // validate collection fields
+    const completedChallenges = Array.isArray(data.completedChallenges) ? data.completedChallenges.filter((x) => typeof x === "string") : next.farmer.completedChallenges;
+    const inProgressChallenges = Array.isArray(data.inProgressChallenges) ? data.inProgressChallenges.filter((x) => typeof x === "string") : next.farmer.inProgressChallenges;
+    const completedLessons = Array.isArray(data.completedLessons) ? data.completedLessons.filter((x) => typeof x === "string") : next.completedLessons;
+    const lessonXpAwarded = Array.isArray(data.lessonXpAwarded) ? data.lessonXpAwarded.filter((x) => typeof x === "string") : next.lessonXpAwarded;
+    const badges = Array.isArray(data.badges) ? data.badges.filter((x) => typeof x === "string") : next.farmer.badges;
+
+    next.farmer.completedChallenges = completedChallenges as string[];
+    next.farmer.inProgressChallenges = inProgressChallenges as string[];
+    next.completedLessons = completedLessons as string[];
+    next.lessonXpAwarded = lessonXpAwarded as string[];
+    next.farmer.badges = badges as string[];
+    next.farmer.completedLessons = completedLessons as string[];
+
+    if (Array.isArray(data.challenges)) {
+      next.challenges = (data.challenges as unknown[]).filter((c) => c && typeof c === "object") as Challenge[];
+    }
     if (Array.isArray(data.submissions)) {
-      next.submissions = (data.submissions as Submission[]).map((s) => {
+      next.submissions = (data.submissions as unknown[]).filter((s) => s && typeof s === "object").map((s) => {
+        const r = s as Record<string, unknown>;
         const safe: Submission = {
-          id: s?.id ?? `sub-${Math.random()}`,
-          farmerId: s?.farmerId ?? "farmer-demo-1",
-          challengeId: s?.challengeId ?? "",
-          description: s?.description ?? "",
-          imageDataUrl: s?.imageDataUrl ?? null,
-          status: s?.status === "approved" || s?.status === "rejected" ? s.status : "pending",
-          submittedAt: s?.submittedAt ?? new Date().toISOString(),
-          reviewedAt: s?.reviewedAt,
-          reviewNote: s?.reviewNote,
-          challengeTitle: s?.challengeTitle,
+          id: typeof r.id === "string" ? r.id : `sub-${Math.random()}`,
+          farmerId: typeof r.farmerId === "string" ? r.farmerId : "farmer-demo-1",
+          challengeId: typeof r.challengeId === "string" ? r.challengeId : "",
+          description: typeof r.description === "string" ? r.description : "",
+          imageDataUrl: typeof r.imageDataUrl === "string" ? r.imageDataUrl : null,
+          status: r.status === "approved" || r.status === "rejected" ? r.status : "pending",
+          submittedAt: typeof r.submittedAt === "string" ? r.submittedAt : new Date().toISOString(),
+          reviewedAt: typeof r.reviewedAt === "string" ? r.reviewedAt : undefined,
+          reviewNote: typeof r.reviewNote === "string" ? r.reviewNote : undefined,
+          challengeTitle: typeof r.challengeTitle === "string" ? r.challengeTitle : undefined,
         };
         if (!safe.challengeTitle) {
           const ch = next.challenges.find((c) => c.id === safe.challengeId) ?? INITIAL_CHALLENGES.find((c) => c.id === safe.challengeId);
@@ -101,8 +118,6 @@ export function normalizeState(loaded: unknown): DemoState {
         return safe;
       });
     }
-    if (Array.isArray(data.completedLessons)) next.completedLessons = data.completedLessons as string[];
-    if (Array.isArray(data.lessonXpAwarded)) next.lessonXpAwarded = data.lessonXpAwarded as string[];
   }
 
   next.farmer.xp = normalizeNumber(next.farmer.xp, seed.farmer.xp);
@@ -137,16 +152,20 @@ export function normalizeState(loaded: unknown): DemoState {
   return applyUnlock(next);
 }
 
+export type SubmitActivityResult =
+  | { success: true; state: DemoState; submission: Submission }
+  | { success: false; state: DemoState; error: string };
+
 export function submitActivityState(
   state: DemoState,
   payload: { challengeId: string; description: string; imageDataUrl: string | null }
-): { state: DemoState; submission: Submission | null; error?: string } {
+): SubmitActivityResult {
   const ch = state.challenges.find((c) => c.id === payload.challengeId);
   if (!ch) {
-    return { state: clone(state), submission: null, error: "Unknown challenge." };
+    return { success: false, state: clone(state), error: "Unknown challenge." };
   }
   if (ch.status !== "in-progress") {
-    return { state: clone(state), submission: null, error: "Activities can only be submitted for in-progress challenges." };
+    return { success: false, state: clone(state), error: "Activities can only be submitted for in-progress challenges." };
   }
   const submission: Submission = {
     id: `sub-${Date.now()}`,
@@ -160,7 +179,7 @@ export function submitActivityState(
   };
   const next = clone(state);
   next.submissions = [submission, ...next.submissions];
-  return { state: applyUnlock(next), submission };
+  return { success: true, state: applyUnlock(next), submission };
 }
 
 export function startChallengeState(state: DemoState, id: string): DemoState {

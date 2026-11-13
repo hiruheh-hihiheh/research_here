@@ -7,6 +7,7 @@ import type {
   DemoState,
   Submission,
 } from "./types";
+import type { SubmitActivityResult } from "./logic";
 import {
   BADGES,
   INITIAL_DEMO_STATE,
@@ -39,7 +40,7 @@ interface DemoContextValue {
   challenges: DemoState["challenges"];
   submissions: DemoState["submissions"];
   startChallenge: (id: string) => void;
-  submitActivity: (payload: { challengeId: string; description: string; imageDataUrl: string | null }) => Submission | null;
+  submitActivity: (payload: { challengeId: string; description: string; imageDataUrl: string | null }) => SubmitActivityResult;
   completeLesson: (lessonId: string, xpReward: number) => { awarded: boolean; xp: number };
   reviewSubmission: (id: string, approved: boolean, note?: string) => void;
   addChallenge: (challenge: Omit<Challenge, "id" | "status"> & { status?: Challenge["status"] }) => Challenge;
@@ -109,12 +110,12 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const submitActivity = useCallback((payload: { challengeId: string; description: string; imageDataUrl: string | null }) => {
-    const { state: next, submission } = submitActivityState(stateRef.current, payload);
-    if (submission) {
-      stateRef.current = next;
-      setState(next);
+    const result = submitActivityState(stateRef.current, payload);
+    if (result.success) {
+      stateRef.current = result.state;
+      setState(result.state);
     }
-    return submission as Submission;
+    return result;
   }, []);
 
   const completeLesson = useCallback((lessonId: string, xpReward: number) => {

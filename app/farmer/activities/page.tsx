@@ -58,7 +58,12 @@ export default function ActivitiesPage() {
       setError("Start a challenge first to submit an activity.");
       return;
     }
-    submitActivity({ challengeId: selectedChallenge.id, description: description.trim(), imageDataUrl });
+    const result = submitActivity({ challengeId: selectedChallenge.id, description: description.trim(), imageDataUrl });
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+    setError(null);
     setDescription("");
     setImageDataUrl(null);
     setPreview(null);

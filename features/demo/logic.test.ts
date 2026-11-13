@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { clone, normalizeState, completeLessonState, startChallengeState, updateChallengeState, deleteChallengeState, submitActivityState } from "./logic";
+import { clone, normalizeState, completeLessonState, startChallengeState, updateChallengeState, deleteChallengeState, submitActivityState, reviewSubmissionState } from "./logic";
 import { INITIAL_DEMO_STATE } from "./mockData";
 import type { FarmerProfile } from "./types";
 
@@ -67,19 +67,31 @@ describe("lesson XP", () => {
     expect(b.state.farmer.xp).toBe(a.state.farmer.xp);
   });
 
-  it("rapid duplicate produces accurate award result", () => {
+  it("sequential duplicate completion awards XP only once", () => {
     const fresh = clone(INITIAL_DEMO_STATE);
     fresh.completedLessons = [];
     fresh.lessonXpAwarded = [];
     fresh.farmer.completedLessons = [];
     fresh.farmer.xp = 0;
-    const a = completeLessonState(fresh, "x", 10);
-    const b = completeLessonState(fresh, "x", 10);
-    // second uses original state, would report awarded true; but sequential usage is correct
-    expect(a.awarded).toBe(true);
-    // using returned state prevents duplicate
-    const c = completeLessonState(a.state, "x", 10);
-    expect(c.awarded).toBe(false);
+    const first = completeLessonState(fresh, "lesson-x", 10);
+    expect(first.awarded).toBe(true);
+    expect(first.state.farmer.xp).toBe(10);
+    const second = completeLessonState(first.state, "lesson-x", 10);
+    expect(second.awarded).toBe(false);
+    expect(second.state.farmer.xp).toBe(10);
+  });
+
+  it("saved state does not grant XP again", () => {
+    const fresh = clone(INITIAL_DEMO_STATE);
+    fresh.completedLessons = [];
+    fresh.lessonXpAwarded = [];
+    fresh.farmer.completedLessons = [];
+    fresh.farmer.xp = 0;
+    const first = completeLessonState(fresh, "lesson-y", 15);
+    const restored = normalizeState(first.state);
+    const replay = completeLessonState(restored, "lesson-y", 15);
+    expect(replay.awarded).toBe(false);
+    expect(replay.state.farmer.xp).toBe(15);
   });
 
   it("completing a different lesson still awards XP", () => {
@@ -93,6 +105,66 @@ describe("lesson XP", () => {
     expect(a.awarded).toBe(true);
     expect(b.awarded).toBe(true);
     expect(b.state.farmer.xp).toBe(30);
+  });
+});
+
+describe("review lifecycle", () => {
+  it("approving awards XP once", () => {
+    const state = clone(INITIAL_DEMO_STATE);
+    const ch = state.challenges.find((c) => c.status === "available")!;
+    // make in-progress
+    const started = startChallengeState(state, ch.id);
+    // submit
+    const subRes = submitActivityState(started, { challengeId: ch.id, description: "work", imageDataUrl: null });
+    expect(subRes.success).toBe(true);
+    const subId = (subRes as { success: true; submission: { id: string } }).submission.id;
+    const approved = reviewSubmissionState(subRes.state, subId, true);
+    const xpAfter = approved.farmer.xp;
+    const second = reviewSubmissionState(approved, subId, true);
+    expect(second.farmer.xp).toBe(xpAfter);
+  });
+
+  it("rejected does not award XP", () => {
+    const state = clone(INITIAL_DEMO_STATE);
+    const ch = state.challenges.find((c) => c.status === "available")!;
+    const started = startChallengeState(state, ch.id);
+    const subRes = submitActivityState(started, { challengeId: ch.id, description: "work", imageDataUrl: null });
+    const before = subRes.state.farmer.xp;
+    const rejected = reviewSubmissionState(subRes.state, (subRes as { success: true; submission: { id: string } }).submission.id, false);
+    expect(rejected.farmer.xp).toBe(before);
+  });
+
+  it("approval updates sustainability and badge", () => {
+    const state = clone(INITIAL_DEMO_STATE);
+    const ch = state.challenges.find((c) => c.status === "available")!;
+    const started = startChallengeState(state, ch.id);
+    const subRes = submitActivityState(started, { challengeId: ch.id, description: "work", imageDataUrl: null });
+    const approved = reviewSubmissionState(subRes.state, (subRes as { success: true; submission: { id: string } }).submission.id, true);
+    expect(approved.farmer.completedChallenges).toContain(ch.id);
+  });
+});
+
+describe("malformed state", () => {
+  it("does not crash on invalid collections", () => {
+    const old = clone(INITIAL_DEMO_STATE);
+    (old as unknown as Record<string, unknown>).completedChallenges = "bad";
+    (old as unknown as Record<string, unknown>).submissions = [{ foo: 1 }];
+    (old as unknown as Record<string, unknown>).farmer = null;
+    const next = normalizeState(old);
+    expect(Array.isArray(next.farmer.completedChallenges)).toBe(true);
+    expect(Array.isArray(next.submissions)).toBe(true);
+    expect(next.farmer.name).toBeTruthy();
+  });
+
+  it("invalid submissions do not crash", () => {
+    const old = clone(INITIAL_DEMO_STATE);
+    (old as unknown as Record<string, unknown>).submissions = [null, 42, { challengeId: "x" }];
+    const next = normalizeState(old);
+    expect(Array.isArray(next.submissions)).toBe(true);
+    next.submissions.forEach((s) => {
+      expect(typeof s.id).toBe("string");
+      expect(typeof s.status).toBe("string");
+    });
   });
 });
 
@@ -136,16 +208,16 @@ describe("activity submission", () => {
     const state = clone(INITIAL_DEMO_STATE);
     const ip = state.challenges.find((c) => c.status === "in-progress")!;
     const res = submitActivityState(state, { challengeId: ip.id, description: "did work", imageDataUrl: null });
-    expect(res.submission).not.toBeNull();
-    expect(res.state.submissions[0].challengeId).toBe(ip.id);
+    expect(res.success).toBe(true);
+    if (res.success) expect(res.submission.challengeId).toBe(ip.id);
   });
 
   it("rejects available", () => {
     const state = clone(INITIAL_DEMO_STATE);
     const avail = state.challenges.find((c) => c.status === "available")!;
     const res = submitActivityState(state, { challengeId: avail.id, description: "x", imageDataUrl: null });
-    expect(res.submission).toBeNull();
-    expect(res.error).toBeTruthy();
+    expect(res.success).toBe(false);
+    if (!res.success) expect(res.error).toBeTruthy();
   });
 
   it("rejects archived", () => {
@@ -153,33 +225,47 @@ describe("activity submission", () => {
     const avail = state.challenges.find((c) => c.status === "available")!;
     const archivedState = updateChallengeState(state, avail.id, { status: "archived" });
     const res = submitActivityState(archivedState, { challengeId: avail.id, description: "x", imageDataUrl: null });
-    expect(res.submission).toBeNull();
+    expect(res.success).toBe(false);
   });
 
   it("rejects completed", () => {
     const state = clone(INITIAL_DEMO_STATE);
     const completed = state.challenges.find((c) => c.status === "completed")!;
     const res = submitActivityState(state, { challengeId: completed.id, description: "x", imageDataUrl: null });
-    expect(res.submission).toBeNull();
+    expect(res.success).toBe(false);
   });
 
   it("rejects unknown", () => {
     const state = clone(INITIAL_DEMO_STATE);
     const res = submitActivityState(state, { challengeId: "nope", description: "x", imageDataUrl: null });
-    expect(res.submission).toBeNull();
+    expect(res.success).toBe(false);
   });
 });
 
 describe("deletion protection", () => {
   it("pending submissions prevent deletion", () => {
     const state = clone(INITIAL_DEMO_STATE);
-    // add a pending submission for first challenge
-    const ch = state.challenges[0];
+    const ch = state.challenges.find((c) => c.status === "available")!;
     state.submissions = [
       { id: "s1", farmerId: "f", challengeId: ch.id, description: "d", imageDataUrl: null, status: "pending", submittedAt: new Date().toISOString() },
     ];
     const res = deleteChallengeState(state, ch.id);
     expect(res.deleted).toBe(false);
+    expect(res.reason).toContain("Pending");
+    const stillThere = state.challenges.find((c) => c.id === ch.id);
+    expect(stillThere).toBeTruthy();
+  });
+
+  it("archived challenge with pending legacy submission is protected", () => {
+    const state = clone(INITIAL_DEMO_STATE);
+    const ch = state.challenges.find((c) => c.status === "available")!;
+    const archivedState = updateChallengeState(state, ch.id, { status: "archived" });
+    archivedState.submissions = [
+      { id: "s-legacy", farmerId: "f", challengeId: ch.id, description: "d", imageDataUrl: null, status: "pending", submittedAt: new Date().toISOString() },
+    ];
+    const res = deleteChallengeState(archivedState, ch.id);
+    expect(res.deleted).toBe(false);
+    expect(res.reason).toContain("Pending");
   });
 
   it("approved/rejected submissions remain visible after deletion", () => {
