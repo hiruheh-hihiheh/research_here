@@ -189,26 +189,32 @@ describe("review lifecycle", () => {
   it("approving awards XP once", () => {
     const state = clone(INITIAL_DEMO_STATE);
     const ch = state.challenges.find((c) => c.status === "available")!;
-    // make in-progress
     const started = startChallengeState(state, ch.id);
-    // submit
+    const beforeXp = started.farmer.xp;
     const subRes = submitActivityState(started, { challengeId: ch.id, description: "work", imageDataUrl: null });
     expect(subRes.success).toBe(true);
-    const subId = (subRes as { success: true; submission: { id: string } }).submission.id;
+    if (!subRes.success) throw new Error(subRes.error);
+    const subId = subRes.submission.id;
     const approved = reviewSubmissionState(subRes.state, subId, true);
-    const xpAfter = approved.farmer.xp;
-    const second = reviewSubmissionState(approved, subId, true);
-    expect(second.farmer.xp).toBe(xpAfter);
+    const approvedSub = approved.submissions.find((s) => s.id === subId)!;
+    expect(approvedSub.status).toBe("approved");
+    expect(approved.farmer.xp).toBe(beforeXp + ch.xpReward);
+    const repeat = reviewSubmissionState(approved, subId, true);
+    expect(repeat.farmer.xp).toBe(approved.farmer.xp);
   });
 
   it("rejected does not award XP", () => {
     const state = clone(INITIAL_DEMO_STATE);
     const ch = state.challenges.find((c) => c.status === "available")!;
     const started = startChallengeState(state, ch.id);
+    const beforeXp = started.farmer.xp;
     const subRes = submitActivityState(started, { challengeId: ch.id, description: "work", imageDataUrl: null });
-    const before = subRes.state.farmer.xp;
-    const rejected = reviewSubmissionState(subRes.state, (subRes as { success: true; submission: { id: string } }).submission.id, false);
-    expect(rejected.farmer.xp).toBe(before);
+    expect(subRes.success).toBe(true);
+    if (!subRes.success) throw new Error(subRes.error);
+    const rejected = reviewSubmissionState(subRes.state, subRes.submission.id, false);
+    expect(rejected.farmer.xp).toBe(beforeXp);
+    const rejectedSub = rejected.submissions.find((s) => s.id === subRes.submission.id)!;
+    expect(rejectedSub.status).toBe("rejected");
   });
 
   it("approval updates sustainability and badge", () => {
