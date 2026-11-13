@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { clone, normalizeState, completeLessonState, startChallengeState, updateChallengeState, deleteChallengeState, submitActivityState, reviewSubmissionState } from "./logic";
 import { INITIAL_DEMO_STATE } from "./mockData";
-import type { FarmerProfile } from "./types";
+import type { FarmerProfile, Challenge } from "./types";
 
 describe("migration", () => {
   it("fills missing sustainability categories and preserves valid values", () => {
@@ -33,6 +33,48 @@ describe("migration", () => {
     expect(next.submissions[0].challengeTitle).toBe(ch.title);
   });
 
+  it("nested farmer collections null are safe", () => {
+    const old = clone(INITIAL_DEMO_STATE);
+    const farmer = old.farmer as unknown as Record<string, unknown>;
+    farmer.completedChallenges = null;
+    farmer.inProgressChallenges = null;
+    farmer.badges = null;
+    farmer.completedLessons = "bad" as unknown;
+    const next = normalizeState(old);
+    expect(Array.isArray(next.farmer.completedChallenges)).toBe(true);
+    expect(Array.isArray(next.farmer.inProgressChallenges)).toBe(true);
+    expect(Array.isArray(next.farmer.badges)).toBe(true);
+    expect(Array.isArray(next.farmer.completedLessons)).toBe(true);
+  });
+
+  it("all four nested fields missing", () => {
+    const old = clone(INITIAL_DEMO_STATE);
+    const farmer = { ...old.farmer } as Record<string, unknown>;
+    delete farmer.completedChallenges;
+    delete farmer.inProgressChallenges;
+    delete farmer.badges;
+    delete farmer.completedLessons;
+    old.farmer = farmer as unknown as FarmerProfile;
+    const next = normalizeState(old);
+    expect(Array.isArray(next.farmer.completedChallenges)).toBe(true);
+    expect(Array.isArray(next.farmer.inProgressChallenges)).toBe(true);
+    expect(Array.isArray(next.farmer.badges)).toBe(true);
+    expect(Array.isArray(next.farmer.completedLessons)).toBe(true);
+  });
+
+  it("malformed challenge records are dropped", () => {
+    const old = clone(INITIAL_DEMO_STATE);
+    old.challenges = [
+      null,
+      42,
+      { id: "bad" },
+      { id: "ok", title: "Ok", category: "Water conservation", difficulty: "Beginner", xpReward: 10, duration: "1w", objectives: ["a"], instructions: ["b"], status: "available" },
+    ] as unknown as Challenge[];
+    const next = normalizeState(old);
+    expect(next.challenges.find((c) => c.id === "ok")).toBeTruthy();
+    expect(next.challenges.find((c) => c.id === "bad")).toBeUndefined();
+  });
+
   it("missing farmer fields receive safe defaults", () => {
     const old = clone(INITIAL_DEMO_STATE);
     old.farmer = { xp: 10 } as unknown as FarmerProfile;
@@ -53,7 +95,6 @@ describe("migration", () => {
 describe("lesson XP", () => {
   it("completing a lesson twice awards XP only once", () => {
     const first = completeLessonState(INITIAL_DEMO_STATE, "water-basics", 60);
-    const second = completeLessonState(first.state, "water-basics", 60);
     expect(first.awarded).toBe(false); // already in seed
     // use a fresh lesson
     const fresh = clone(INITIAL_DEMO_STATE);
@@ -136,11 +177,34 @@ describe("review lifecycle", () => {
 
   it("approval updates sustainability and badge", () => {
     const state = clone(INITIAL_DEMO_STATE);
-    const ch = state.challenges.find((c) => c.status === "available")!;
-    const started = startChallengeState(state, ch.id);
-    const subRes = submitActivityState(started, { challengeId: ch.id, description: "work", imageDataUrl: null });
-    const approved = reviewSubmissionState(subRes.state, (subRes as { success: true; submission: { id: string } }).submission.id, true);
-    expect(approved.farmer.completedChallenges).toContain(ch.id);
+    const ch = state.challenges.find((c) => c.id === "soil-composting")!;
+    const beforeXp = state.farmer.xp;
+    const beforeSoil = state.farmer.sustainabilityProgress["Soil health"];
+    const subRes = submitActivityState(state, { challengeId: ch.id, description: "work", imageDataUrl: null });
+    expect(subRes.success).toBe(true);
+    if (!subRes.success) return;
+    const subId = subRes.submission.id;
+    const approved = reviewSubmissionState(subRes.state, subId, true);
+    const sub = approved.submissions.find((s) => s.id === subId)!;
+    expect(sub.status).toBe("approved");
+    expect(approved.farmer.xp).toBe(beforeXp + ch.xpReward);
+    expect(approved.farmer.sustainabilityProgress["Soil health"]).toBe(Math.min(100, beforeSoil + 8));
+    expect(approved.farmer.badges).toContain("soil-guardian");
+    const repeat = reviewSubmissionState(approved, subId, true);
+    expect(repeat.farmer.xp).toBe(approved.farmer.xp);
+    expect(repeat.farmer.sustainabilityProgress["Soil health"]).toBe(approved.farmer.sustainabilityProgress["Soil health"]);
+  });
+
+  it("rejected submission awards no XP and no progress", () => {
+    const state = clone(INITIAL_DEMO_STATE);
+    const ch = state.challenges.find((c) => c.id === "soil-composting")!;
+    const beforeXp = state.farmer.xp;
+    const beforeSoil = state.farmer.sustainabilityProgress["Soil health"];
+    const subRes = submitActivityState(state, { challengeId: ch.id, description: "work", imageDataUrl: null });
+    if (!subRes.success) return;
+    const rejected = reviewSubmissionState(subRes.state, subRes.submission.id, false);
+    expect(rejected.farmer.xp).toBe(beforeXp);
+    expect(rejected.farmer.sustainabilityProgress["Soil health"]).toBe(beforeSoil);
   });
 });
 

@@ -79,12 +79,36 @@ export function normalizeState(loaded: unknown): DemoState {
     next.farmer.avatar = next.farmer.avatar || seed.farmer.avatar;
     next.farmer.season = next.farmer.season || seed.farmer.season;
 
-    // validate collection fields
-    const completedChallenges = Array.isArray(data.completedChallenges) ? data.completedChallenges.filter((x) => typeof x === "string") : next.farmer.completedChallenges;
-    const inProgressChallenges = Array.isArray(data.inProgressChallenges) ? data.inProgressChallenges.filter((x) => typeof x === "string") : next.farmer.inProgressChallenges;
-    const completedLessons = Array.isArray(data.completedLessons) ? data.completedLessons.filter((x) => typeof x === "string") : next.completedLessons;
-    const lessonXpAwarded = Array.isArray(data.lessonXpAwarded) ? data.lessonXpAwarded.filter((x) => typeof x === "string") : next.lessonXpAwarded;
-    const badges = Array.isArray(data.badges) ? data.badges.filter((x) => typeof x === "string") : next.farmer.badges;
+    const farmerData = (data.farmer && typeof data.farmer === "object" ? data.farmer : {}) as Record<string, unknown>;
+
+    // validate collection fields from nested farmer
+    const completedChallenges = Array.isArray(farmerData.completedChallenges)
+      ? farmerData.completedChallenges.filter((x) => typeof x === "string")
+      : Array.isArray(next.farmer.completedChallenges)
+      ? next.farmer.completedChallenges
+      : [];
+    const inProgressChallenges = Array.isArray(farmerData.inProgressChallenges)
+      ? farmerData.inProgressChallenges.filter((x) => typeof x === "string")
+      : Array.isArray(next.farmer.inProgressChallenges)
+      ? next.farmer.inProgressChallenges
+      : [];
+    const completedLessons = Array.isArray(data.completedLessons)
+      ? data.completedLessons.filter((x) => typeof x === "string")
+      : Array.isArray(farmerData.completedLessons)
+      ? farmerData.completedLessons.filter((x) => typeof x === "string")
+      : Array.isArray(next.completedLessons)
+      ? next.completedLessons
+      : [];
+    const lessonXpAwarded = Array.isArray(data.lessonXpAwarded)
+      ? data.lessonXpAwarded.filter((x) => typeof x === "string")
+      : Array.isArray(next.lessonXpAwarded)
+      ? next.lessonXpAwarded
+      : [];
+    const badges = Array.isArray(farmerData.badges)
+      ? farmerData.badges.filter((x) => typeof x === "string")
+      : Array.isArray(next.farmer.badges)
+      ? next.farmer.badges
+      : [];
 
     next.farmer.completedChallenges = completedChallenges as string[];
     next.farmer.inProgressChallenges = inProgressChallenges as string[];
@@ -94,7 +118,38 @@ export function normalizeState(loaded: unknown): DemoState {
     next.farmer.completedLessons = completedLessons as string[];
 
     if (Array.isArray(data.challenges)) {
-      next.challenges = (data.challenges as unknown[]).filter((c) => c && typeof c === "object") as Challenge[];
+      const validStatuses: ChallengeStatus[] = ["available", "in-progress", "completed", "archived"];
+      next.challenges = (data.challenges as unknown[])
+        .map((raw) => {
+          if (!raw || typeof raw !== "object") return null;
+          const r = raw as Record<string, unknown>;
+          const id = typeof r.id === "string" && r.id.trim() ? r.id : null;
+          const title = typeof r.title === "string" && r.title.trim() ? r.title : null;
+          const description = typeof r.description === "string" ? r.description : "";
+          const category = typeof r.category === "string" ? r.category : null;
+          const difficulty = r.difficulty === "Beginner" || r.difficulty === "Intermediate" || r.difficulty === "Advanced" ? r.difficulty : "Beginner";
+          const xpReward = typeof r.xpReward === "number" && Number.isFinite(r.xpReward) && r.xpReward >= 0 ? r.xpReward : 0;
+          const duration = typeof r.duration === "string" ? r.duration : "1 week";
+          const objectives = Array.isArray(r.objectives) ? r.objectives.filter((x) => typeof x === "string") : [];
+          const instructions = Array.isArray(r.instructions) ? r.instructions.filter((x) => typeof x === "string") : [];
+          const status = validStatuses.includes(r.status as ChallengeStatus) ? (r.status as ChallengeStatus) : "available";
+          if (!id || !title || !category) return null;
+          const challenge: Challenge = {
+            id,
+            title,
+            description,
+            category: category as Challenge["category"],
+            difficulty,
+            xpReward,
+            duration,
+            objectives,
+            instructions,
+            status,
+            region: typeof r.region === "string" ? r.region : undefined,
+          };
+          return challenge;
+        })
+        .filter((c): c is Challenge => c !== null);
     }
     if (Array.isArray(data.submissions)) {
       next.submissions = (data.submissions as unknown[]).filter((s) => s && typeof s === "object").map((s) => {
